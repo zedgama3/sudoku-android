@@ -7,5 +7,5 @@ import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(val application: Application) {
     val applicationScope = CoroutineScope(SupervisorJob())
-    val gameRepository by lazy { GameRepository(applicationScope) }
+    val gameRepository by lazy { GameRepository(applicationScope, application) }
 }

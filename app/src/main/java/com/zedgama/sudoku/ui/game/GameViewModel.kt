@@ -1,8 +1,13 @@
 package com.zedgama.sudoku.ui.game
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zedgama.sudoku.data.GameRepository
+import com.zedgama.sudoku.data.model.SavedGame
+import com.zedgama.sudoku.data.model.boardFrom
+import com.zedgama.sudoku.data.model.toBoard
+import com.zedgama.sudoku.data.model.toSnapshot
 import com.zedgama.sudoku.engine.Board
 import com.zedgama.sudoku.engine.Difficulty
 import com.zedgama.sudoku.engine.Hint
@@ -19,29 +24,89 @@ import kotlinx.coroutines.launch
 
 class GameViewModel(
     private val repository: GameRepository,
-    private val requestedDifficulty: Difficulty
+    private val requestedDifficulty: Difficulty,
+    resume: Boolean = false,
+    savedStateHandle: SavedStateHandle? = null
 ) : ViewModel() {
+
+    // After process death the nav back stack is restored and this ViewModel is
+    // recreated with its original arguments; without this flag a "new game"
+    // route would generate a fresh puzzle and clobber the auto-saved one.
+    private val resume: Boolean =
+        resume || savedStateHandle?.get<Boolean>(KEY_STARTED) == true
+
+    init {
+        savedStateHandle?.set(KEY_STARTED, true)
+    }
 
     private val _state = MutableStateFlow(GameUiState(loading = true))
     val state: StateFlow<GameUiState> = _state
 
+    private var givens: String = ""
+    private var solutionString: String = ""
     private var solution: IntArray = IntArray(81)
     private val undoStack = ArrayDeque<Board>()
     private val redoStack = ArrayDeque<Board>()
+    private var inForeground = true
 
     init {
         viewModelScope.launch {
-            val puzzle = repository.nextPuzzle(requestedDifficulty)
-            solution = IntArray(81) { puzzle.solution[it] - '0' }
-            _state.update {
-                GameUiState(
-                    loading = false,
-                    board = Board.fromGivens(puzzle.givens),
-                    difficulty = requestedDifficulty
-                )
+            val saved = if (this@GameViewModel.resume) repository.loadSavedGame() else null
+            if (saved != null) {
+                restore(saved)
+            } else {
+                val puzzle = repository.nextPuzzle(requestedDifficulty)
+                givens = puzzle.givens
+                solutionString = puzzle.solution
+                solution = IntArray(81) { puzzle.solution[it] - '0' }
+                _state.update {
+                    GameUiState(
+                        loading = false,
+                        board = Board.fromGivens(puzzle.givens),
+                        difficulty = requestedDifficulty
+                    )
+                }
+                persist()
             }
             startTimer()
         }
+    }
+
+    private fun restore(saved: SavedGame) {
+        givens = saved.givens
+        solutionString = saved.solution
+        solution = IntArray(81) { saved.solution[it] - '0' }
+        undoStack.clear()
+        redoStack.clear()
+        saved.undoStack.forEach { undoStack.addLast(boardFrom(saved.givens, it)) }
+        saved.redoStack.forEach { redoStack.addLast(boardFrom(saved.givens, it)) }
+        val board = saved.toBoard()
+        _state.update {
+            GameUiState(
+                loading = false,
+                board = board,
+                difficulty = saved.difficulty,
+                elapsedMillis = saved.elapsedMillis,
+                mistakes = saved.mistakes,
+                hintsUsed = saved.hintsUsed,
+                canUndo = undoStack.isNotEmpty(),
+                canRedo = redoStack.isNotEmpty(),
+                errorCells = (0 until 81).filter { i ->
+                    val v = board[i].value
+                    v != 0 && !board[i].isGiven && v != solution[i]
+                }.toSet()
+            )
+        }
+    }
+
+    /** Called from the UI on lifecycle ON_START / ON_STOP. */
+    fun onForeground() {
+        inForeground = true
+    }
+
+    fun onBackground() {
+        inForeground = false
+        persist()
     }
 
     private fun startTimer() {
@@ -49,12 +114,30 @@ class GameViewModel(
             while (isActive) {
                 delay(1000)
                 _state.update { s ->
-                    if (!s.paused && !s.isWon && !s.loading) {
+                    if (inForeground && !s.paused && !s.isWon && !s.loading) {
                         s.copy(elapsedMillis = s.elapsedMillis + 1000)
                     } else s
                 }
             }
         }
+    }
+
+    private fun persist() {
+        val s = _state.value
+        if (s.loading || s.isWon) return
+        val game = SavedGame(
+            givens = givens,
+            solution = solutionString,
+            current = s.board.cells.joinToString("") { it.value.toString() },
+            notes = s.board.cells.map { it.notes },
+            difficulty = s.difficulty,
+            elapsedMillis = s.elapsedMillis,
+            mistakes = s.mistakes,
+            hintsUsed = s.hintsUsed,
+            undoStack = undoStack.map { it.toSnapshot() },
+            redoStack = redoStack.map { it.toSnapshot() }
+        )
+        viewModelScope.launch { repository.saveGame(game) }
     }
 
     fun onCellTap(index: Int) {
@@ -225,9 +308,15 @@ class GameViewModel(
                 selectedCell = if (won) null else s.selectedCell
             )
         }
+        if (won) {
+            viewModelScope.launch { repository.clearSavedGame() }
+        } else {
+            persist()
+        }
     }
 
     private companion object {
         const val MAX_UNDO = 100
+        const val KEY_STARTED = "game_started"
     }
 }

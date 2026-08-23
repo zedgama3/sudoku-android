@@ -1,7 +1,10 @@
 package com.zedgama.sudoku.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -11,6 +14,7 @@ import com.zedgama.sudoku.SudokuApplication
 import com.zedgama.sudoku.engine.Difficulty
 import com.zedgama.sudoku.ui.game.GameScreen
 import com.zedgama.sudoku.ui.game.GameViewModel
+import com.zedgama.sudoku.ui.home.ContinueInfo
 import com.zedgama.sudoku.ui.home.HomeScreen
 import kotlinx.serialization.Serializable
 
@@ -18,7 +22,7 @@ import kotlinx.serialization.Serializable
 object HomeRoute
 
 @Serializable
-data class GameRoute(val difficulty: String)
+data class GameRoute(val difficulty: String, val resume: Boolean = false)
 
 @Composable
 fun SudokuApp() {
@@ -27,9 +31,15 @@ fun SudokuApp() {
 
     NavHost(navController = navController, startDestination = HomeRoute) {
         composable<HomeRoute> {
+            val saved by app.container.gameRepository.savedGameFlow
+                .collectAsStateWithLifecycle(initialValue = null)
             HomeScreen(
-                continueInfo = null,
-                onContinue = {},
+                continueInfo = saved?.let { ContinueInfo(it.difficulty, it.elapsedMillis) },
+                onContinue = {
+                    saved?.let {
+                        navController.navigate(GameRoute(it.difficulty.name, resume = true))
+                    }
+                },
                 onNewGame = { difficulty ->
                     navController.navigate(GameRoute(difficulty.name))
                 }
@@ -39,7 +49,12 @@ fun SudokuApp() {
             val route = entry.toRoute<GameRoute>()
             val difficulty = Difficulty.valueOf(route.difficulty)
             val vm: GameViewModel = viewModel {
-                GameViewModel(app.container.gameRepository, difficulty)
+                GameViewModel(
+                    app.container.gameRepository,
+                    difficulty,
+                    route.resume,
+                    createSavedStateHandle()
+                )
             }
             GameScreen(
                 viewModel = vm,

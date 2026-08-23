@@ -1,22 +1,52 @@
 package com.zedgama.sudoku.data
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.DataStoreFactory
+import com.zedgama.sudoku.data.model.SavedGame
 import com.zedgama.sudoku.engine.Difficulty
 import com.zedgama.sudoku.engine.GeneratedPuzzle
 import com.zedgama.sudoku.engine.Generator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.nullable
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Hands out puzzles, keeping one pre-generated puzzle per difficulty warm
- * so "New Game" is instant.
+ * Hands out puzzles (one pre-generated per difficulty kept warm so "New Game"
+ * is instant) and owns the saved-game store.
  */
-class GameRepository(private val scope: CoroutineScope) {
+class GameRepository(
+    private val scope: CoroutineScope,
+    context: Context
+) {
 
     private val generator = Generator()
     private val cache = ConcurrentHashMap<Difficulty, GeneratedPuzzle>()
+
+    private val savedGameStore: DataStore<SavedGame?> = DataStoreFactory.create(
+        serializer = JsonSerializer(SavedGame.serializer().nullable, null),
+        scope = CoroutineScope(scope.coroutineContext + SupervisorJob() + Dispatchers.IO),
+        produceFile = { File(context.filesDir, "saved_game.json") }
+    )
+
+    val savedGameFlow: Flow<SavedGame?> = savedGameStore.data
+
+    suspend fun loadSavedGame(): SavedGame? = savedGameStore.data.first()
+
+    suspend fun saveGame(game: SavedGame) {
+        savedGameStore.updateData { game }
+    }
+
+    suspend fun clearSavedGame() {
+        savedGameStore.updateData { null }
+    }
 
     init {
         Difficulty.entries.forEach(::refill)
