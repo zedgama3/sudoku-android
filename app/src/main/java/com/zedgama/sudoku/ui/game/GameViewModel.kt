@@ -4,6 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zedgama.sudoku.data.GameRepository
+import com.zedgama.sudoku.data.SettingsRepository
+import com.zedgama.sudoku.data.StatsRepository
+import com.zedgama.sudoku.data.model.InputMode
 import com.zedgama.sudoku.data.model.SavedGame
 import com.zedgama.sudoku.data.model.boardFrom
 import com.zedgama.sudoku.data.model.toBoard
@@ -26,7 +29,9 @@ class GameViewModel(
     private val repository: GameRepository,
     private val requestedDifficulty: Difficulty,
     resume: Boolean = false,
-    savedStateHandle: SavedStateHandle? = null
+    savedStateHandle: SavedStateHandle? = null,
+    private val settingsRepository: SettingsRepository? = null,
+    private val statsRepository: StatsRepository? = null
 ) : ViewModel() {
 
     // After process death the nav back stack is restored and this ViewModel is
@@ -48,6 +53,8 @@ class GameViewModel(
     private val undoStack = ArrayDeque<Board>()
     private val redoStack = ArrayDeque<Board>()
     private var inForeground = true
+    private var autoRemoveNotes = true
+    private var resultRecorded = false
 
     init {
         viewModelScope.launch {
@@ -67,9 +74,49 @@ class GameViewModel(
                     )
                 }
                 persist()
+                statsRepository?.recordGameStarted(requestedDifficulty)
             }
             startTimer()
         }
+        settingsRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.settings.collect { s ->
+                    autoRemoveNotes = s.autoRemoveNotes
+                    _state.update {
+                        it.copy(
+                            inputMode = s.inputMode,
+                            mistakeChecking = s.mistakeChecking,
+                            showTimer = s.showTimer,
+                            mistakeLimit = if (s.mistakeLimitEnabled) MISTAKE_LIMIT else null,
+                            armedDigit = if (s.inputMode == InputMode.DIGIT_FIRST) it.armedDigit else null
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Restart the same puzzle after running out of mistakes. */
+    fun onRetry() {
+        undoStack.clear()
+        redoStack.clear()
+        resultRecorded = false
+        _state.update {
+            it.copy(
+                board = Board.fromGivens(givens),
+                selectedCell = null,
+                armedDigit = null,
+                elapsedMillis = 0,
+                mistakes = 0,
+                hintsUsed = 0,
+                isFailed = false,
+                errorCells = emptySet(),
+                canUndo = false,
+                canRedo = false,
+                hint = null
+            )
+        }
+        persist()
     }
 
     private fun restore(saved: SavedGame) {
@@ -142,7 +189,7 @@ class GameViewModel(
 
     fun onCellTap(index: Int) {
         val s = _state.value
-        if (s.loading || s.paused || s.isWon) return
+        if (s.loading || s.paused || s.isWon || s.isFailed) return
         if (s.inputMode == InputMode.DIGIT_FIRST && s.armedDigit != null) {
             applyDigit(index, s.armedDigit)
         } else {
@@ -152,7 +199,7 @@ class GameViewModel(
 
     fun onDigit(digit: Int) {
         val s = _state.value
-        if (s.loading || s.paused || s.isWon) return
+        if (s.loading || s.paused || s.isWon || s.isFailed) return
         if (s.inputMode == InputMode.DIGIT_FIRST) {
             _state.update {
                 it.copy(armedDigit = if (it.armedDigit == digit) null else digit, hint = null)
@@ -164,7 +211,7 @@ class GameViewModel(
 
     fun onErase() {
         val s = _state.value
-        if (s.loading || s.paused || s.isWon) return
+        if (s.loading || s.paused || s.isWon || s.isFailed) return
         val index = s.selectedCell ?: return
         val cell = s.board[index]
         if (cell.isGiven || (cell.value == 0 && cell.notes == 0)) return
@@ -194,7 +241,7 @@ class GameViewModel(
 
     fun onHint() {
         val s = _state.value
-        if (s.loading || s.paused || s.isWon) return
+        if (s.loading || s.paused || s.isWon || s.isFailed) return
         val current = s.board.values()
         when (val hint = HintEngine.hint(current, solution, s.selectedCell)) {
             is Hint.WrongCell -> {
@@ -254,10 +301,8 @@ class GameViewModel(
             // Tapping the same digit clears the cell
             newBoard = s.board.with(index, cell.copy(value = 0))
         } else {
-            newBoard = clearPeerNotes(
-                s.board.with(index, cell.copy(value = digit, notes = 0)),
-                index, digit
-            )
+            val placed = s.board.with(index, cell.copy(value = digit, notes = 0))
+            newBoard = if (autoRemoveNotes) clearPeerNotes(placed, index, digit) else placed
             mistake = s.mistakeChecking && solution[index] != digit
         }
         _state.update { it.copy(selectedCell = index, hint = null) }
@@ -297,26 +342,49 @@ class GameViewModel(
         }
         val won = board.isFull && (0 until 81).all { board[it].value == solution[it] }
         _state.update { s ->
+            val newMistakes = s.mistakes + if (countMistake) 1 else 0
+            val failed = s.isFailed ||
+                (!won && s.mistakeLimit != null && newMistakes >= s.mistakeLimit)
             s.copy(
                 board = board,
-                mistakes = s.mistakes + if (countMistake) 1 else 0,
+                mistakes = newMistakes,
                 errorCells = errors,
                 isWon = won,
+                isFailed = failed,
                 canUndo = undoStack.isNotEmpty(),
                 canRedo = redoStack.isNotEmpty(),
                 armedDigit = if (won) null else s.armedDigit,
                 selectedCell = if (won) null else s.selectedCell
             )
         }
-        if (won) {
-            viewModelScope.launch { repository.clearSavedGame() }
-        } else {
-            persist()
+        val after = _state.value
+        when {
+            won -> {
+                if (!resultRecorded) {
+                    resultRecorded = true
+                    viewModelScope.launch {
+                        repository.clearSavedGame()
+                        val newBest =
+                            statsRepository?.recordWin(after.difficulty, after.elapsedMillis)
+                                ?: false
+                        _state.update { it.copy(isNewBest = newBest) }
+                    }
+                }
+            }
+            after.isFailed -> {
+                if (!resultRecorded) {
+                    resultRecorded = true
+                    viewModelScope.launch { statsRepository?.recordLoss(after.difficulty) }
+                }
+                persist()
+            }
+            else -> persist()
         }
     }
 
     private companion object {
         const val MAX_UNDO = 100
+        const val MISTAKE_LIMIT = 3
         const val KEY_STARTED = "game_started"
     }
 }

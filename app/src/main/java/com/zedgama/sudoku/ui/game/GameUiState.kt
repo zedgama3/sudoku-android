@@ -1,9 +1,8 @@
 package com.zedgama.sudoku.ui.game
 
+import com.zedgama.sudoku.data.model.InputMode
 import com.zedgama.sudoku.engine.Board
 import com.zedgama.sudoku.engine.Difficulty
-
-enum class InputMode { CELL_FIRST, DIGIT_FIRST }
 
 data class HintUi(val message: String, val cells: List<Int>)
 
@@ -23,6 +22,9 @@ data class GameUiState(
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val isWon: Boolean = false,
+    val isNewBest: Boolean = false,
+    val isFailed: Boolean = false,
+    val mistakeLimit: Int? = null,
     val errorCells: Set<Int> = emptySet(),
     val hint: HintUi? = null,
     val showTimer: Boolean = true

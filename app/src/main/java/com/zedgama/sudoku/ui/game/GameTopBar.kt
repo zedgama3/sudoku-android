@@ -33,6 +33,7 @@ fun GameTopBar(
     difficulty: Difficulty,
     mistakes: Int,
     mistakeChecking: Boolean,
+    mistakeLimit: Int?,
     elapsedMillis: Long,
     showTimer: Boolean,
     paused: Boolean,
@@ -59,7 +60,8 @@ fun GameTopBar(
         androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
         if (mistakeChecking) {
             Text(
-                "Mistakes: $mistakes",
+                if (mistakeLimit != null) "Mistakes: $mistakes/$mistakeLimit"
+                else "Mistakes: $mistakes",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (mistakes > 0) MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant,

@@ -76,6 +76,7 @@ fun GameScreen(
                 difficulty = state.difficulty,
                 mistakes = state.mistakes,
                 mistakeChecking = state.mistakeChecking,
+                mistakeLimit = state.mistakeLimit,
                 elapsedMillis = state.elapsedMillis,
                 showTimer = state.showTimer,
                 paused = state.paused,
@@ -164,9 +165,27 @@ fun GameScreen(
                 elapsedMillis = state.elapsedMillis,
                 mistakes = state.mistakes,
                 hintsUsed = state.hintsUsed,
-                isNewBest = false,
+                isNewBest = state.isNewBest,
                 onNewGame = { onNewGame?.invoke() },
                 onHome = onBack
+            )
+        }
+
+        if (state.isFailed) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Out of mistakes") },
+                text = { Text("You've made ${state.mistakes} mistakes. Try this puzzle again or start a new one.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = viewModel::onRetry) {
+                        Text("Retry")
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { onNewGame?.invoke() }) {
+                        Text("New Game")
+                    }
+                }
             )
         }
     }
