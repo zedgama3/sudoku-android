@@ -4,12 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zedgama.sudoku.engine.Difficulty
+import com.zedgama.sudoku.ui.game.GameScreen
+import com.zedgama.sudoku.ui.game.GameViewModel
 import com.zedgama.sudoku.ui.theme.SudokuTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,15 +16,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             SudokuTheme {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Hello Sudoku",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                }
+                val vm: GameViewModel = viewModel { GameViewModel(Difficulty.MEDIUM) }
+                GameScreen(viewModel = vm)
             }
         }
     }
