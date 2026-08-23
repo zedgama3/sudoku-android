@@ -2,25 +2,23 @@ package com.zedgama.sudoku.ui.game
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zedgama.sudoku.data.GameRepository
 import com.zedgama.sudoku.engine.Board
-import com.zedgama.sudoku.engine.Cell
 import com.zedgama.sudoku.engine.Difficulty
-import com.zedgama.sudoku.engine.Generator
 import com.zedgama.sudoku.engine.Hint
 import com.zedgama.sudoku.engine.HintEngine
 import com.zedgama.sudoku.engine.boxOf
 import com.zedgama.sudoku.engine.colOf
 import com.zedgama.sudoku.engine.rowOf
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class GameViewModel(
+    private val repository: GameRepository,
     private val requestedDifficulty: Difficulty
 ) : ViewModel() {
 
@@ -33,9 +31,7 @@ class GameViewModel(
 
     init {
         viewModelScope.launch {
-            val puzzle = withContext(Dispatchers.Default) {
-                Generator().generate(requestedDifficulty)
-            }
+            val puzzle = repository.nextPuzzle(requestedDifficulty)
             solution = IntArray(81) { puzzle.solution[it] - '0' }
             _state.update {
                 GameUiState(
