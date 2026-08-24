@@ -22,7 +22,14 @@ data class SavedGame(
     val mistakes: Int,
     val hintsUsed: Int,
     val undoStack: List<BoardSnapshot> = emptyList(),
-    val redoStack: List<BoardSnapshot> = emptyList()
+    val redoStack: List<BoardSnapshot> = emptyList(),
+    // Tiered-hint escalation state; defaults keep older saved files decodable.
+    val hintLevel: Int = 0,
+    val hintPinnedCell: Int = -1,                          // -1 = no pin
+    val hintPinnedDigit: Int = 0,
+    val hintPinnedTechniques: List<String> = emptyList(),  // Technique.name, ordered
+    val hintPinnedIsReveal: Boolean = false,
+    val mistakeHintLevel: Int = 0
 )
 
 fun Board.toSnapshot(): BoardSnapshot = BoardSnapshot(

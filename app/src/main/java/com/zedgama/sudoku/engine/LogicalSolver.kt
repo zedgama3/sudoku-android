@@ -19,6 +19,16 @@ data class LogicalStep(
 
 data class LogicalResult(val solved: Boolean, val techniques: Set<Technique>)
 
+/** The ordered deductions leading from a position to a tie-broken placement. */
+data class HintChain(
+    val eliminations: List<LogicalStep>,   // value == 0, in application order
+    val placement: LogicalStep             // value != 0
+) {
+    /** Distinct techniques in order of first application, ending with the placement's. */
+    val techniques: List<Technique>
+        get() = (eliminations.map { it.technique } + placement.technique).distinct()
+}
+
 /**
  * Solves with a small ladder of human techniques, in order of difficulty:
  * naked single, hidden single, locked candidates (pointing/claiming), naked pair, hidden pair.
@@ -75,6 +85,74 @@ object LogicalSolver {
             if (step.value != 0) return step
         }
     }
+
+    /**
+     * All rank-1 placements available right now, without applying any of them.
+     * Deduped by (cell, digit); a naked single wins attribution over a hidden single.
+     */
+    fun enumerateSingles(grid: CandidateGrid): List<LogicalStep> {
+        val steps = mutableListOf<LogicalStep>()
+        val seen = HashSet<Int>() // cellIndex * 10 + digit
+        for (i in 0 until 81) {
+            if (grid.values[i] != 0) continue
+            val c = grid.cands[i]
+            if (Integer.bitCount(c) == 1) {
+                val d = Integer.numberOfTrailingZeros(c) + 1
+                if (seen.add(i * 10 + d)) {
+                    steps.add(
+                        LogicalStep(
+                            Technique.NAKED_SINGLE, i, d, listOf(i),
+                            "Naked single: $d is the only candidate left in this cell."
+                        )
+                    )
+                }
+            }
+        }
+        for (h in 0 until 27) {
+            val cells = houses[h]
+            for (d in 1..9) {
+                val bit = 1 shl (d - 1)
+                var target = -1
+                var count = 0
+                for (i in cells) {
+                    if (grid.values[i] == 0 && grid.cands[i] and bit != 0) {
+                        target = i
+                        if (++count > 1) break
+                    }
+                }
+                if (count == 1 && seen.add(target * 10 + d)) {
+                    steps.add(
+                        LogicalStep(
+                            Technique.HIDDEN_SINGLE, target, d, cells.toList(),
+                            "Hidden single: $d fits only one cell in ${houseName(h)}."
+                        )
+                    )
+                }
+            }
+        }
+        return steps
+    }
+
+    /**
+     * Runs eliminations until at least one single exists, then picks the placement by
+     * ascending digit, then ascending cell index. Returns null if the ladder stalls first.
+     */
+    fun placementChain(puzzle: IntArray): HintChain? {
+        val grid = CandidateGrid(puzzle) ?: return null
+        val eliminations = mutableListOf<LogicalStep>()
+        while (true) {
+            val singles = enumerateSingles(grid)
+            if (singles.isNotEmpty()) {
+                val placement = singles.minWith(compareBy({ it.value }, { it.cellIndex }))
+                return HintChain(eliminations, placement)
+            }
+            val elimination = nextElimination(grid) ?: return null
+            eliminations.add(elimination)
+        }
+    }
+
+    private fun nextElimination(g: CandidateGrid): LogicalStep? =
+        lockedCandidates(g) ?: nakedPair(g) ?: hiddenPair(g)
 
     private fun nakedSingle(g: CandidateGrid): LogicalStep? {
         for (i in 0 until 81) {

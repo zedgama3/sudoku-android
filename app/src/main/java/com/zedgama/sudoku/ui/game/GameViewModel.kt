@@ -13,8 +13,9 @@ import com.zedgama.sudoku.data.model.toBoard
 import com.zedgama.sudoku.data.model.toSnapshot
 import com.zedgama.sudoku.engine.Board
 import com.zedgama.sudoku.engine.Difficulty
-import com.zedgama.sudoku.engine.Hint
-import com.zedgama.sudoku.engine.HintEngine
+import com.zedgama.sudoku.engine.HintEscalation
+import com.zedgama.sudoku.engine.PinnedHint
+import com.zedgama.sudoku.engine.Technique
 import com.zedgama.sudoku.engine.boxOf
 import com.zedgama.sudoku.engine.colOf
 import com.zedgama.sudoku.engine.rowOf
@@ -52,6 +53,7 @@ class GameViewModel(
     private var solution: IntArray = IntArray(81)
     private val undoStack = ArrayDeque<Board>()
     private val redoStack = ArrayDeque<Board>()
+    private val hintEscalation = HintEscalation()
     private var inForeground = true
     private var autoRemoveNotes = true
     private var resultRecorded = false
@@ -100,6 +102,7 @@ class GameViewModel(
     fun onRetry() {
         undoStack.clear()
         redoStack.clear()
+        hintEscalation.reset()
         resultRecorded = false
         _state.update {
             it.copy(
@@ -127,6 +130,16 @@ class GameViewModel(
         redoStack.clear()
         saved.undoStack.forEach { undoStack.addLast(boardFrom(saved.givens, it)) }
         saved.redoStack.forEach { redoStack.addLast(boardFrom(saved.givens, it)) }
+        val pinned = if (saved.hintPinnedCell in 0 until 81) {
+            PinnedHint(
+                cellIndex = saved.hintPinnedCell,
+                digit = saved.hintPinnedDigit,
+                techniques = saved.hintPinnedTechniques
+                    .mapNotNull { name -> Technique.entries.find { it.name == name } },
+                isReveal = saved.hintPinnedIsReveal
+            )
+        } else null
+        hintEscalation.restore(saved.hintLevel, pinned, saved.mistakeHintLevel)
         val board = saved.toBoard()
         _state.update {
             GameUiState(
@@ -182,7 +195,13 @@ class GameViewModel(
             mistakes = s.mistakes,
             hintsUsed = s.hintsUsed,
             undoStack = undoStack.map { it.toSnapshot() },
-            redoStack = redoStack.map { it.toSnapshot() }
+            redoStack = redoStack.map { it.toSnapshot() },
+            hintLevel = hintEscalation.level,
+            hintPinnedCell = hintEscalation.pinned?.cellIndex ?: -1,
+            hintPinnedDigit = hintEscalation.pinned?.digit ?: 0,
+            hintPinnedTechniques = hintEscalation.pinned?.techniques?.map { it.name } ?: emptyList(),
+            hintPinnedIsReveal = hintEscalation.pinned?.isReveal ?: false,
+            mistakeHintLevel = hintEscalation.mistakeLevel
         )
         viewModelScope.launch { repository.saveGame(game) }
     }
@@ -236,53 +255,117 @@ class GameViewModel(
     }
 
     fun onTogglePause() {
-        _state.update { s -> if (s.isWon) s else s.copy(paused = !s.paused, hint = null) }
+        // Keep the hint card: the escalation state behind it persists, and the player may
+        // have paid for the tier being shown.
+        _state.update { s -> if (s.isWon) s else s.copy(paused = !s.paused) }
     }
 
     fun onHint() {
         val s = _state.value
         if (s.loading || s.paused || s.isWon || s.isFailed) return
         val current = s.board.values()
-        when (val hint = HintEngine.hint(current, solution, s.selectedCell)) {
-            is Hint.WrongCell -> {
-                pushUndo(s.board)
-                val fixed = s.board.with(hint.index, s.board[hint.index].copy(value = hint.correct, notes = 0))
+        val outcome =
+            hintEscalation.onHintPressed(current, solution, s.mistakeChecking, s.selectedCell)
+        when (outcome) {
+            is HintEscalation.Outcome.FixFirstWrong -> placeHint(
+                index = outcome.cellIndex,
+                digit = outcome.correct,
+                charged = true,
+                message = "That cell was wrong — corrected to ${outcome.correct}.",
+                highlight = listOf(outcome.cellIndex)
+            )
+            is HintEscalation.Outcome.ShowTechniques -> {
+                val pin = outcome.pinned
+                val message = if (pin.isReveal) {
+                    "No standard technique applies here — the next hint reveals a digit."
+                } else {
+                    "The next placement uses:"
+                }
+                _state.update { it.copy(hint = HintUi(message, emptyList(), pin.techniques)) }
+                persist()
+            }
+            is HintEscalation.Outcome.ShowDigit -> {
                 _state.update {
                     it.copy(
-                        selectedCell = hint.index,
-                        hintsUsed = it.hintsUsed + 1,
-                        hint = HintUi("That cell was wrong — corrected to ${hint.correct}.", listOf(hint.index))
+                        hintsUsed = it.hintsUsed + if (outcome.charged) 1 else 0,
+                        hint = HintUi("A ${outcome.digit} can be placed somewhere.", emptyList())
                     )
                 }
-                updateBoard(clearPeerNotes(fixed, hint.index, hint.correct))
+                persist()
             }
-            is Hint.Logical -> {
-                pushUndo(s.board)
-                val step = hint.step
-                val placed = s.board.with(step.cellIndex, s.board[step.cellIndex].copy(value = step.value, notes = 0))
+            is HintEscalation.Outcome.Place -> placeHint(
+                index = outcome.cellIndex,
+                digit = outcome.digit,
+                charged = outcome.charged,
+                message = if (outcome.isReveal) {
+                    "Revealed: ${outcome.digit} goes here."
+                } else {
+                    "${outcome.techniques.last().label}: ${outcome.digit} goes here."
+                },
+                highlight = listOf(outcome.cellIndex)
+            )
+            is HintEscalation.Outcome.ShowMistakeCount -> {
+                val message = if (outcome.count == 1) {
+                    "There is 1 incorrect cell."
+                } else {
+                    "There are ${outcome.count} incorrect cells."
+                }
+                _state.update { it.copy(hint = HintUi(message, emptyList())) }
+                persist()
+            }
+            is HintEscalation.Outcome.HighlightMistakes -> {
                 _state.update {
                     it.copy(
-                        selectedCell = step.cellIndex,
-                        hintsUsed = it.hintsUsed + 1,
-                        hint = HintUi(step.message, step.involvedCells)
+                        hintsUsed = it.hintsUsed + if (outcome.charged) 1 else 0,
+                        hint = HintUi(
+                            if (outcome.cells.size == 1) "This cell is incorrect." else "These cells are incorrect.",
+                            outcome.cells
+                        )
                     )
                 }
-                updateBoard(clearPeerNotes(placed, step.cellIndex, step.value))
+                persist()
             }
-            is Hint.Reveal -> {
+            is HintEscalation.Outcome.FixMistakes -> {
                 pushUndo(s.board)
-                val placed = s.board.with(hint.index, s.board[hint.index].copy(value = hint.value, notes = 0))
+                var board = s.board
+                for ((index, correct) in outcome.corrections) {
+                    board = board.with(index, board[index].copy(value = correct, notes = 0))
+                    if (autoRemoveNotes) board = clearPeerNotes(board, index, correct)
+                }
+                val cells = outcome.corrections.map { it.first }
                 _state.update {
                     it.copy(
-                        selectedCell = hint.index,
-                        hintsUsed = it.hintsUsed + 1,
-                        hint = HintUi("Revealed: ${hint.value} goes here.", listOf(hint.index))
+                        selectedCell = cells.first(),
+                        hintsUsed = it.hintsUsed + if (outcome.charged) 1 else 0,
+                        hint = HintUi(
+                            if (cells.size == 1) "Corrected 1 cell." else "Corrected ${cells.size} cells.",
+                            cells
+                        )
                     )
                 }
-                updateBoard(clearPeerNotes(placed, hint.index, hint.value))
+                updateBoard(board)
             }
-            null -> Unit
+            HintEscalation.Outcome.None -> Unit
         }
+    }
+
+    private fun placeHint(index: Int, digit: Int, charged: Boolean, message: String, highlight: List<Int>) {
+        val s = _state.value
+        pushUndo(s.board)
+        val placed = s.board.with(index, s.board[index].copy(value = digit, notes = 0))
+        _state.update {
+            it.copy(
+                selectedCell = index,
+                hintsUsed = it.hintsUsed + if (charged) 1 else 0,
+                hint = HintUi(message, highlight)
+            )
+        }
+        updateBoard(clearPeerNotes(placed, index, digit))
+    }
+
+    /** Pauses the game before opening the technique explainer, keeping the hint card intact. */
+    fun onOpenExplainer() {
+        _state.update { it.copy(paused = true) }
     }
 
     private fun applyDigit(index: Int, digit: Int) {
@@ -332,6 +415,7 @@ class GameViewModel(
     }
 
     private fun updateBoard(board: Board, countMistake: Boolean = false) {
+        hintEscalation.onBoardChanged(board.values(), solution)
         val errors = if (_state.value.mistakeChecking) {
             (0 until 81).filter { i ->
                 val v = board[i].value

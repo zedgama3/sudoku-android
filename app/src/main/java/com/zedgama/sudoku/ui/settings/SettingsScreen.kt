@@ -92,7 +92,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 
             SwitchRow(
                 "Mistake checking",
-                "Highlight entries that don't match the solution",
+                "Highlight entries that don't match the solution. When off, hints can find mistakes for you",
                 settings.mistakeChecking,
                 viewModel::setMistakeChecking
             )

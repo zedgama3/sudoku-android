@@ -15,6 +15,7 @@ import com.zedgama.sudoku.SudokuApplication
 import com.zedgama.sudoku.data.model.ThemeMode
 import com.zedgama.sudoku.data.model.UserSettings
 import com.zedgama.sudoku.engine.Difficulty
+import com.zedgama.sudoku.engine.Technique
 import com.zedgama.sudoku.ui.game.GameScreen
 import com.zedgama.sudoku.ui.game.GameViewModel
 import com.zedgama.sudoku.ui.home.ContinueInfo
@@ -23,6 +24,7 @@ import com.zedgama.sudoku.ui.settings.SettingsScreen
 import com.zedgama.sudoku.ui.settings.SettingsViewModel
 import com.zedgama.sudoku.ui.stats.StatsScreen
 import com.zedgama.sudoku.ui.stats.StatsViewModel
+import com.zedgama.sudoku.ui.technique.TechniqueScreen
 import com.zedgama.sudoku.ui.theme.SudokuTheme
 import kotlinx.serialization.Serializable
 
@@ -31,6 +33,9 @@ object HomeRoute
 
 @Serializable
 data class GameRoute(val difficulty: String, val resume: Boolean = false)
+
+@Serializable
+data class TechniqueRoute(val technique: String)
 
 @Serializable
 object StatsRoute
@@ -91,7 +96,17 @@ fun SudokuApp() {
                         navController.navigate(GameRoute(difficulty.name)) {
                             popUpTo<HomeRoute>()
                         }
+                    },
+                    onOpenTechnique = { technique ->
+                        navController.navigate(TechniqueRoute(technique.name))
                     }
+                )
+            }
+            composable<TechniqueRoute> { entry ->
+                val route = entry.toRoute<TechniqueRoute>()
+                TechniqueScreen(
+                    technique = Technique.valueOf(route.technique),
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable<StatsRoute> {

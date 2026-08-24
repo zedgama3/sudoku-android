@@ -28,7 +28,8 @@ fun BoardCanvas(
     hintCells: List<Int>,
     paused: Boolean,
     onCellTap: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    secondaryHintCells: List<Int> = emptyList()
 ) {
     val colors = MaterialTheme.colorScheme
     val textMeasurer = rememberTextMeasurer(cacheSize = 256)
@@ -63,6 +64,7 @@ fun BoardCanvas(
                     i == selectedCell -> colors.primaryContainer
                     i in errorCells -> colors.errorContainer
                     i in hintCells -> colors.tertiary.copy(alpha = 0.20f)
+                    i in secondaryHintCells -> colors.secondary.copy(alpha = 0.20f)
                     highlightDigit != null && board[i].value == highlightDigit ->
                         colors.secondaryContainer
                     selectedCell != null &&

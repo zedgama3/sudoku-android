@@ -74,12 +74,12 @@ fun GameTopBar(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            IconButton(onClick = onTogglePause) {
-                Icon(
-                    if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                    contentDescription = if (paused) "Resume" else "Pause"
-                )
-            }
+        }
+        IconButton(onClick = onTogglePause) {
+            Icon(
+                if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                contentDescription = if (paused) "Resume" else "Pause"
+            )
         }
     }
 }

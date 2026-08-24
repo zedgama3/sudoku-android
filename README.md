@@ -11,8 +11,11 @@ A full-featured native Android sudoku game built with Kotlin and Jetpack Compose
 - **Pencil notes** with automatic cleanup when a digit is placed
 - **Two input styles** — cell-first (tap cell, then digit) or digit-first
   (arm a digit, then paint cells), selectable in settings
-- **Tiered hints** — fixes a wrong entry first, otherwise teaches the next logical
-  step (with technique name and involved cells highlighted), falling back to a reveal
+- **Tiered hints** — one button with escalating presses: names the techniques that
+  lead to the next placement (free, with tap-through explainer screens and worked
+  examples), then reveals the digit, then places it. Never charges twice for the
+  same hint; wrong entries get their own count → highlight → correct flow when
+  mistake checking is off
 - **Mistake checking** with optional 3-mistake limit
 - **Undo/redo**, timer with pause (board hidden while paused), win detection
 - **Save/resume** — the game auto-saves on every action and survives process death
@@ -29,6 +32,7 @@ Open in Android Studio, or from the command line:
 ```
 
 Requires JDK 17+ and the Android SDK with platform 37 (`platforms;android-37.0`).
+See [DEPLOYING.md](DEPLOYING.md) for step-by-step instructions on installing to a phone.
 
 ## Architecture
 

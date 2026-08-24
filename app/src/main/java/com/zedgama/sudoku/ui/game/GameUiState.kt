@@ -3,8 +3,13 @@ package com.zedgama.sudoku.ui.game
 import com.zedgama.sudoku.data.model.InputMode
 import com.zedgama.sudoku.engine.Board
 import com.zedgama.sudoku.engine.Difficulty
+import com.zedgama.sudoku.engine.Technique
 
-data class HintUi(val message: String, val cells: List<Int>)
+data class HintUi(
+    val message: String,
+    val cells: List<Int>,
+    val techniques: List<Technique> = emptyList()  // non-empty → rendered as clickable chips
+)
 
 data class GameUiState(
     val loading: Boolean = true,

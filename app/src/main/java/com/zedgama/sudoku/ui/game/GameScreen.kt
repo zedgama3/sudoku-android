@@ -22,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,18 +30,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.foundation.layout.heightIn
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zedgama.sudoku.engine.Technique
 
 @Composable
 fun GameScreen(
     viewModel: GameViewModel,
     onBack: (() -> Unit)? = null,
-    onNewGame: (() -> Unit)? = null
+    onNewGame: (() -> Unit)? = null,
+    onOpenTechnique: ((Technique) -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
@@ -102,27 +103,24 @@ fun GameScreen(
                     .aspectRatio(1f)
             )
 
-            // Hint banner / paused notice
-            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+            // Hint banner / paused notice (min height keeps the layout from jumping)
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 when {
                     state.paused -> Text(
                         "Paused",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    state.hint != null -> Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text(
-                            state.hint!!.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                    else -> Spacer(Modifier.height(32.dp))
+                    state.hint != null -> HintCard(
+                        hint = state.hint!!,
+                        onTechniqueClick = { technique ->
+                            viewModel.onOpenExplainer()
+                            onOpenTechnique?.invoke(technique)
+                        }
+                    )
                 }
             }
 
