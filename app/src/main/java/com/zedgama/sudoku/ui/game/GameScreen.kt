@@ -95,7 +95,7 @@ fun GameScreen(
                 selectedCell = state.selectedCell,
                 errorCells = state.errorCells,
                 highlightDigit = state.highlightDigit,
-                hintCells = state.hint?.cells ?: emptyList(),
+                hint = state.hint?.highlight,
                 paused = state.paused,
                 onCellTap = viewModel::onCellTap,
                 modifier = Modifier
@@ -103,26 +103,7 @@ fun GameScreen(
                     .aspectRatio(1f)
             )
 
-            // Hint banner / paused notice (min height keeps the layout from jumping)
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    state.paused -> Text(
-                        "Paused",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    state.hint != null -> HintCard(
-                        hint = state.hint!!,
-                        onTechniqueClick = { technique ->
-                            viewModel.onOpenExplainer()
-                            onOpenTechnique?.invoke(technique)
-                        }
-                    )
-                }
-            }
+            Spacer(Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -160,7 +141,32 @@ fun GameScreen(
                 }
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+
+            // Hint banner / paused notice, anchored to the bottom of the screen so showing or
+            // hiding it never moves the board, toolbar or number pad.
+            Spacer(Modifier.weight(1f))
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    state.paused -> Text(
+                        "Paused",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    state.hint != null -> HintCard(
+                        hint = state.hint!!,
+                        onTechniqueClick = { technique ->
+                            viewModel.onOpenExplainer()
+                            onOpenTechnique?.invoke(technique)
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
         }
 
         if (state.isWon) {

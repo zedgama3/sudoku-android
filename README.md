@@ -11,11 +11,14 @@ A full-featured native Android sudoku game built with Kotlin and Jetpack Compose
 - **Pencil notes** with automatic cleanup when a digit is placed
 - **Two input styles** — cell-first (tap cell, then digit) or digit-first
   (arm a digit, then paint cells), selectable in settings
-- **Tiered hints** — one button with escalating presses: names the techniques that
-  lead to the next placement (free, with tap-through explainer screens and worked
-  examples), then reveals the digit, then places it. Never charges twice for the
-  same hint; wrong entries get their own count → highlight → correct flow when
-  mistake checking is off
+- **Hint walkthroughs** — one button walks you through the easiest cell on the board
+  step by step: it opens with the techniques involved (free, as tap-through chips
+  that open explainer screens with worked examples), then lights up the house, the
+  supporting cells and the digit as the reasoning unfolds, and ends by naming the
+  digit — it never enters it for you. One charge per cell, taken the first time you
+  ask for more than the opening step, and the card stays put through taps, notes and
+  entries (and across process death) until you fill the cell yourself. Wrong entries
+  keep their own count → highlight → correct flow when mistake checking is off
 - **Mistake checking** with optional 3-mistake limit
 - **Undo/redo**, timer with pause (board hidden while paused), win detection
 - **Save/resume** — the game auto-saves on every action and survives process death

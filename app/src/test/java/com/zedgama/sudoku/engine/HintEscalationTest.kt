@@ -13,65 +13,104 @@ class HintEscalationTest {
 
     private fun wrongDigitFor(index: Int): Int = solution[index] % 9 + 1
 
+    private fun step(o: HintEscalation.Outcome): HintEscalation.Outcome.Step {
+        assertTrue("expected a Step, got $o", o is HintEscalation.Outcome.Step)
+        return o as HintEscalation.Outcome.Step
+    }
+
     @Test
-    fun normalTrackChargesOnlySecondAndThirdPress() {
+    fun normalTrackChargesOnceOnFirstAdvance() {
         val esc = HintEscalation()
         val current = puzzle.copyOf()
 
-        val o1 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o1 is HintEscalation.Outcome.ShowTechniques)
+        val o1 = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(0, o1.index)
         assertFalse(o1.charged)
+        assertFalse(esc.charged)
 
-        val o2 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o2 is HintEscalation.Outcome.ShowDigit)
+        val o2 = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(1, o2.index)
         assertTrue(o2.charged)
+        assertTrue(esc.charged)
 
-        val o3 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o3 is HintEscalation.Outcome.Place)
-        assertTrue(o3.charged)
-        val place = o3 as HintEscalation.Outcome.Place
-        assertEquals(solution[place.cellIndex], place.digit)
-        assertEquals((o2 as HintEscalation.Outcome.ShowDigit).digit, place.digit)
+        val o3 = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(2, o3.index)
+        assertFalse(o3.charged)
 
-        // Board unchanged (placement not applied): a fourth press re-emits uncharged.
-        val o4 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o4 is HintEscalation.Outcome.Place)
-        assertFalse(o4.charged)
+        val last = o1.plan.steps.lastIndex
+        var latest = o3
+        while (latest.index < last) {
+            latest = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+            assertFalse(latest.charged)
+        }
+        // At the end: re-emits the same index, still free.
+        val again = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(last, again.index)
+        assertFalse(again.charged)
     }
 
     @Test
     fun pinSurvivesUnrelatedBoardChanges() {
         val esc = HintEscalation()
         val current = puzzle.copyOf()
-        val o1 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        val pinnedCell = (o1 as HintEscalation.Outcome.ShowTechniques).pinned.cellIndex
+        val o1 = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        val target = o1.plan.cellIndex
+        step(esc.onHintPressed(current, solution, mistakeChecking = true)) // index 1
+        val indexBefore = esc.stepIndex
 
         // The player correctly fills some other cell.
-        val other = (0 until 81).first { current[it] == 0 && it != pinnedCell }
+        val other = (0 until 81).first { current[it] == 0 && it != target }
         current[other] = solution[other]
         esc.onBoardChanged(current, solution)
 
-        assertEquals(pinnedCell, esc.pinned?.cellIndex)
-        val o2 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o2 is HintEscalation.Outcome.ShowDigit)
-        assertEquals(solution[pinnedCell], (o2 as HintEscalation.Outcome.ShowDigit).digit)
+        assertEquals(target, esc.plan?.cellIndex)
+        assertEquals(indexBefore, esc.stepIndex)
+        assertEquals(HintEngine.planFor(current, solution, target), esc.plan)
     }
 
     @Test
-    fun playerPlacingPinnedDigitResetsForFree() {
+    fun playerPlacingTargetDigitResetsForFree() {
         val esc = HintEscalation()
         val current = puzzle.copyOf()
-        val o1 = esc.onHintPressed(current, solution, mistakeChecking = true)
-        val pin = (o1 as HintEscalation.Outcome.ShowTechniques).pinned
+        val o1 = step(esc.onHintPressed(current, solution, mistakeChecking = true))
 
-        current[pin.cellIndex] = pin.digit
+        current[o1.plan.cellIndex] = o1.plan.digit
         esc.onBoardChanged(current, solution)
 
-        assertEquals(0, esc.level)
-        assertNull(esc.pinned)
-        val next = esc.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(next is HintEscalation.Outcome.ShowTechniques)
+        assertNull(esc.plan)
+        assertEquals(0, esc.stepIndex)
+        assertFalse(esc.charged)
+
+        val next = step(esc.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(0, next.index)
         assertFalse(next.charged)
+    }
+
+    @Test
+    fun targetHoldingWrongDigitKeepsPlan() {
+        val esc = HintEscalation()
+        val current = puzzle.copyOf()
+        step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        val o2 = step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        val target = o2.plan.cellIndex
+        val planBefore = esc.plan
+
+        current[target] = wrongDigitFor(target)
+        esc.onBoardChanged(current, solution)
+        assertEquals(planBefore, esc.plan)
+        assertEquals(1, esc.stepIndex)
+
+        val detour = esc.onHintPressed(current, solution, mistakeChecking = false)
+        assertTrue(detour is HintEscalation.Outcome.ShowMistakeCount)
+
+        current[target] = 0
+        esc.onBoardChanged(current, solution)
+        assertEquals(planBefore, esc.plan)
+        assertEquals(0, esc.mistakeLevel)
+
+        val o3 = step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        assertEquals(2, o3.index)
+        assertFalse(o3.charged)
     }
 
     @Test
@@ -103,8 +142,8 @@ class HintEscalationTest {
         fixes.forEach { (cell, correct) -> current[cell] = correct }
         esc.onBoardChanged(current, solution)
         assertEquals(0, esc.mistakeLevel)
-        val o4 = esc.onHintPressed(current, solution, mistakeChecking = false)
-        assertTrue(o4 is HintEscalation.Outcome.ShowTechniques)
+        val o4 = step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        assertEquals(0, o4.index)
         assertFalse(o4.charged)
     }
 
@@ -112,10 +151,10 @@ class HintEscalationTest {
     fun normalLevelSurvivesMistakeDetour() {
         val esc = HintEscalation()
         val current = puzzle.copyOf()
-        esc.onHintPressed(current, solution, mistakeChecking = false) // normal level 1
+        val o1 = step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        val target = o1.plan.cellIndex
 
-        val pinnedCell = esc.pinned!!.cellIndex
-        val bad = (0 until 81).first { current[it] == 0 && it != pinnedCell }
+        val bad = (0 until 81).first { current[it] == 0 && it != target }
         current[bad] = wrongDigitFor(bad)
         esc.onBoardChanged(current, solution)
 
@@ -127,11 +166,11 @@ class HintEscalationTest {
         esc.onBoardChanged(current, solution)
         assertEquals(0, esc.mistakeLevel)
 
-        // Normal track picks up where it left off: level 2, charged.
-        val o = esc.onHintPressed(current, solution, mistakeChecking = false)
-        assertTrue(o is HintEscalation.Outcome.ShowDigit)
+        // Normal track picks up where it left off: step 2, and this is the one charge.
+        val o = step(esc.onHintPressed(current, solution, mistakeChecking = false))
+        assertEquals(1, o.index)
         assertTrue(o.charged)
-        assertEquals(solution[pinnedCell], (o as HintEscalation.Outcome.ShowDigit).digit)
+        assertEquals(target, o.plan.cellIndex)
     }
 
     @Test
@@ -147,7 +186,7 @@ class HintEscalationTest {
         assertTrue(o.charged)
         assertEquals(empties[0], (o as HintEscalation.Outcome.FixFirstWrong).cellIndex)
         assertEquals(solution[empties[0]], o.correct)
-        assertEquals(0, esc.level)
+        assertNull(esc.plan)
         assertEquals(0, esc.mistakeLevel)
     }
 
@@ -163,23 +202,33 @@ class HintEscalationTest {
         val esc = HintEscalation()
         val current = puzzle.copyOf()
         esc.onHintPressed(current, solution, mistakeChecking = true)
-        esc.onHintPressed(current, solution, mistakeChecking = true) // level 2
+        esc.onHintPressed(current, solution, mistakeChecking = true) // index 1, charged
 
         val restored = HintEscalation()
-        restored.restore(esc.level, esc.pinned, esc.mistakeLevel)
-        val o = restored.onHintPressed(current, solution, mistakeChecking = true)
-        assertTrue(o is HintEscalation.Outcome.Place)
-        assertTrue(o.charged)
-        assertEquals(esc.pinned!!.cellIndex, (o as HintEscalation.Outcome.Place).cellIndex)
+        restored.restore(esc.plan, esc.stepIndex, esc.charged, esc.mistakeLevel)
+        val o = step(restored.onHintPressed(current, solution, mistakeChecking = true))
+        assertEquals(2, o.index)
+        assertFalse(o.charged)
+        assertEquals(esc.plan!!.cellIndex, o.plan.cellIndex)
     }
 
     @Test
-    fun restoreWithoutPinResetsLevel() {
+    fun restoreClampsStepIndex() {
         val esc = HintEscalation()
-        esc.restore(2, null, 0)
-        assertEquals(0, esc.level)
-        val o = esc.onHintPressed(puzzle, solution, mistakeChecking = true)
-        assertTrue(o is HintEscalation.Outcome.ShowTechniques)
+        val plan = HintEngine.plan(puzzle, solution)!!
+        esc.restore(plan, 99, true, 0)
+        assertEquals(plan.steps.lastIndex, esc.stepIndex)
+    }
+
+    @Test
+    fun restoreWithoutPlanResetsState() {
+        val esc = HintEscalation()
+        esc.restore(null, 2, true, 0)
+        assertNull(esc.plan)
+        assertEquals(0, esc.stepIndex)
+        assertFalse(esc.charged)
+        val o = step(esc.onHintPressed(puzzle, solution, mistakeChecking = true))
+        assertEquals(0, o.index)
         assertFalse(o.charged)
     }
 }

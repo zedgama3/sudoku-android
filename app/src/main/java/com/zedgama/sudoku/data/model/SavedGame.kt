@@ -23,12 +23,11 @@ data class SavedGame(
     val hintsUsed: Int,
     val undoStack: List<BoardSnapshot> = emptyList(),
     val redoStack: List<BoardSnapshot> = emptyList(),
-    // Tiered-hint escalation state; defaults keep older saved files decodable.
-    val hintLevel: Int = 0,
-    val hintPinnedCell: Int = -1,                          // -1 = no pin
-    val hintPinnedDigit: Int = 0,
-    val hintPinnedTechniques: List<String> = emptyList(),  // Technique.name, ordered
-    val hintPinnedIsReveal: Boolean = false,
+    // Hint walkthrough state; defaults keep older saved files decodable. The plan itself is rebuilt
+    // from the board on restore (HintEngine.planFor is deterministic), so only the target is stored.
+    val hintTargetCell: Int = -1,     // -1 = no plan pinned
+    val hintStepIndex: Int = 0,
+    val hintCharged: Boolean = false,
     val mistakeHintLevel: Int = 0
 )
 

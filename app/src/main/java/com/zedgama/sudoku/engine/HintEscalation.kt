@@ -1,43 +1,42 @@
 package com.zedgama.sudoku.engine
 
 /**
- * State machine for the tiered hint flow.
+ * State machine for the hint flow.
  *
- * Normal track (no wrong entries): level 1 names the techniques leading to the next placement
- * (free), level 2 reveals its digit (+1), level 3 places it (+1). The target is pinned on the
- * first press so all tiers describe the same move, and the sequence resets only once the pinned
- * digit sits in the pinned cell — whether a hint put it there or the player did — so nobody is
- * ever charged twice for the same hint.
+ * Normal track (no wrong entries): the first press builds a [HintPlan] for the easiest cell on the
+ * board and shows step 1 (free). Each further press advances one step; the single charge for the
+ * plan is taken the first time the player advances past step 1, and a press at the last step
+ * re-emits it for free. No step ever fills the cell — the last one just names the digit.
+ *
+ * The plan is the source of truth for the card: it stays pinned through taps, notes and digits,
+ * is rebuilt (with the step index clamped) after any clean board change so the reasoning stays
+ * true, and clears only when the target cell holds the target digit or the game is reset.
  *
  * Mistake track (wrong entries present and mistake checking off): level 1 counts the wrong
  * cells (free), level 2 highlights them (+1), level 3 corrects them all (+1). With mistake
  * checking on, wrong cells are already visible, so a press simply corrects the first one (+1).
- *
- * A press at an already-max level re-emits the same outcome without charging.
+ * While the board holds a wrong entry the plan is left exactly as it was.
  */
 class HintEscalation {
 
-    var level: Int = 0
+    var plan: HintPlan? = null
         private set
-    var pinned: PinnedHint? = null
+    var stepIndex: Int = 0
+        private set
+    var charged: Boolean = false
         private set
     var mistakeLevel: Int = 0
         private set
 
+    val currentStep: HintStep? get() = plan?.steps?.getOrNull(stepIndex)
+
     sealed class Outcome {
         abstract val charged: Boolean
 
-        data class ShowTechniques(val pinned: PinnedHint) : Outcome() {
-            override val charged: Boolean get() = false
-        }
-
-        data class ShowDigit(val digit: Int, override val charged: Boolean) : Outcome()
-
-        data class Place(
-            val cellIndex: Int,
-            val digit: Int,
-            val techniques: List<Technique>,
-            val isReveal: Boolean,
+        /** Show [index] of [plan]'s steps. */
+        data class Step(
+            val plan: HintPlan,
+            val index: Int,
             override val charged: Boolean
         ) : Outcome()
 
@@ -85,41 +84,65 @@ class HintEscalation {
         }
 
         if (current.all { it != 0 }) return Outcome.None
-        val pin = pinned ?: HintEngine.pinTarget(current, solution, selected) ?: return Outcome.None
-        pinned = pin
-        val advanced = level < 3
-        if (advanced) level++
-        return when (level) {
-            1 -> Outcome.ShowTechniques(pin)
-            2 -> Outcome.ShowDigit(pin.digit, charged = advanced)
-            else -> Outcome.Place(pin.cellIndex, pin.digit, pin.techniques, pin.isReveal, charged = advanced)
+        val existing = plan
+        if (existing == null) {
+            val fresh = HintEngine.plan(current, solution, selected) ?: return Outcome.None
+            plan = fresh
+            stepIndex = 0
+            charged = false
+            return Outcome.Step(fresh, 0, charged = false)
         }
+        if (stepIndex < existing.steps.lastIndex) {
+            stepIndex++
+            val chargeNow = !charged
+            charged = true
+            return Outcome.Step(existing, stepIndex, charged = chargeNow)
+        }
+        return Outcome.Step(existing, stepIndex, charged = false)   // at the end: re-emit, free
     }
 
     /**
-     * Call after every board change. Resets the normal track once the pinned digit sits in the
-     * pinned cell, and the mistake track once no wrong cells remain.
+     * Call after every board change. Clears the plan once the target digit sits in the target
+     * cell, rebuilds it (clamping the step index) after any other clean change, and leaves it
+     * untouched while the board holds a wrong entry. The mistake track resets once the board is
+     * clean again.
      */
     fun onBoardChanged(current: IntArray, solution: IntArray) {
-        val pin = pinned
-        if (pin != null && current[pin.cellIndex] == pin.digit) {
-            pinned = null
-            level = 0
+        val p = plan
+        val wrong = HintEngine.wrongCells(current, solution)
+        if (p != null) {
+            when {
+                // solved by the player
+                current[p.cellIndex] == p.digit -> {
+                    plan = null
+                    stepIndex = 0
+                    charged = false
+                }
+                // board is unreliable (incl. a wrong digit in the target): keep the plan pinned as is
+                wrong.isNotEmpty() -> Unit
+                else -> {
+                    val fresh = HintEngine.planFor(current, solution, p.cellIndex)
+                    if (fresh != p) {
+                        plan = fresh
+                        stepIndex = stepIndex.coerceIn(0, fresh.steps.lastIndex)
+                    }
+                }
+            }
         }
-        if (mistakeLevel != 0 && HintEngine.wrongCells(current, solution).isEmpty()) {
-            mistakeLevel = 0
-        }
+        if (mistakeLevel != 0 && wrong.isEmpty()) mistakeLevel = 0
     }
 
     fun reset() {
-        level = 0
-        pinned = null
+        plan = null
+        stepIndex = 0
+        charged = false
         mistakeLevel = 0
     }
 
-    fun restore(level: Int, pinned: PinnedHint?, mistakeLevel: Int) {
-        this.pinned = pinned
-        this.level = if (pinned == null) 0 else level.coerceIn(0, 3)
+    fun restore(plan: HintPlan?, stepIndex: Int, charged: Boolean, mistakeLevel: Int) {
+        this.plan = plan
+        this.stepIndex = if (plan == null) 0 else stepIndex.coerceIn(0, plan.steps.lastIndex)
+        this.charged = if (plan == null) false else charged
         this.mistakeLevel = mistakeLevel.coerceIn(0, 3)
     }
 }

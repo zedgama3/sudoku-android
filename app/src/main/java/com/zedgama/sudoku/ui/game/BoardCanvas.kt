@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -15,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.zedgama.sudoku.engine.Board
+import com.zedgama.sudoku.engine.HintHighlight
 import com.zedgama.sudoku.engine.boxOf
 import com.zedgama.sudoku.engine.colOf
 import com.zedgama.sudoku.engine.rowOf
@@ -25,11 +27,10 @@ fun BoardCanvas(
     selectedCell: Int?,
     errorCells: Set<Int>,
     highlightDigit: Int?,
-    hintCells: List<Int>,
     paused: Boolean,
     onCellTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    secondaryHintCells: List<Int> = emptyList()
+    hint: HintHighlight? = null
 ) {
     val colors = MaterialTheme.colorScheme
     val textMeasurer = rememberTextMeasurer(cacheSize = 256)
@@ -59,12 +60,31 @@ fun BoardCanvas(
             val selRow = selectedCell?.let(::rowOf)
             val selCol = selectedCell?.let(::colOf)
             val selBox = selectedCell?.let(::boxOf)
+            val hintPrimary = hint?.primary?.toSet()
+            val hintSecondary = hint?.secondary?.toSet()
+            val hintDigit = hint?.digit
+
+            // Cell fill, first match wins:
+            //   1. error                errorContainer          (a wrong entry must never be hidden)
+            //   2. hint primary         tertiary  @ 0.40
+            //   3. hint secondary       tertiary  @ 0.18        (same hue as primary, softer; must stay
+            //                                                    distinct from the gray selection shading)
+            //   4. hint digit instance  secondaryContainer      (board[i].value == hint.digit; reads like
+            //                                                    the same-digit highlight the player knows)
+            //   5. selected cell        primaryContainer
+            //   6. same digit           secondaryContainer      (armed / selected digit)
+            //   7. selected row/col/box surfaceVariant @ 0.55
+            // Then the selected cell always gets a primary-colored inset stroke on top, so selecting a
+            // hinted cell keeps its hint tint and still reads as selected.
             for (i in 0 until 81) {
                 val bg: Color? = when {
-                    i == selectedCell -> colors.primaryContainer
                     i in errorCells -> colors.errorContainer
-                    i in hintCells -> colors.tertiary.copy(alpha = 0.20f)
-                    i in secondaryHintCells -> colors.secondary.copy(alpha = 0.20f)
+                    hintPrimary != null && i in hintPrimary -> colors.tertiary.copy(alpha = 0.40f)
+                    hintSecondary != null && i in hintSecondary ->
+                        colors.tertiary.copy(alpha = 0.18f)
+                    hintDigit != null && board[i].value == hintDigit ->
+                        colors.secondaryContainer
+                    i == selectedCell -> colors.primaryContainer
                     highlightDigit != null && board[i].value == highlightDigit ->
                         colors.secondaryContainer
                     selectedCell != null &&
@@ -75,6 +95,17 @@ fun BoardCanvas(
                 if (bg != null) {
                     drawRect(bg, topLeft = cellRect(i), size = Size(cell, cell))
                 }
+            }
+
+            if (selectedCell != null) {
+                val inset = 1.dp.toPx()
+                val origin = cellRect(selectedCell)
+                drawRect(
+                    colors.primary,
+                    topLeft = Offset(origin.x + inset, origin.y + inset),
+                    size = Size(cell - 2 * inset, cell - 2 * inset),
+                    style = Stroke(2.dp.toPx())
+                )
             }
         }
 

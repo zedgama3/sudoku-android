@@ -4,6 +4,11 @@ fun rowOf(index: Int): Int = index / 9
 fun colOf(index: Int): Int = index % 9
 fun boxOf(index: Int): Int = (index / 27) * 3 + (index % 9) / 3
 
+/** The 20 cells sharing a row, column or box with [index]. */
+fun peersOf(index: Int): List<Int> = (0 until 81).filter {
+    it != index && (rowOf(it) == rowOf(index) || colOf(it) == colOf(index) || boxOf(it) == boxOf(index))
+}
+
 data class Cell(
     val value: Int = 0,        // 0 = empty, 1..9
     val isGiven: Boolean = false,

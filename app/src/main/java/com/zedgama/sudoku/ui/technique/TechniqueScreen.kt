@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.zedgama.sudoku.engine.HintHighlight
 import com.zedgama.sudoku.engine.Technique
 import com.zedgama.sudoku.ui.game.BoardCanvas
 
@@ -61,13 +62,15 @@ fun TechniqueScreen(technique: Technique, onBack: () -> Unit) {
                 selectedCell = null,
                 errorCells = emptySet(),
                 highlightDigit = info.example.highlightDigit,
-                hintCells = info.example.hintCells,
                 paused = false,
                 onCellTap = {},
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f),
-                secondaryHintCells = info.example.secondaryCells
+                hint = HintHighlight(
+                    primary = info.example.hintCells,
+                    secondary = info.example.secondaryCells
+                )
             )
             Spacer(Modifier.height(8.dp))
             Text(

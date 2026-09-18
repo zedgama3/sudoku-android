@@ -31,6 +31,14 @@ fun HintCard(hint: HintUi, onTechniqueClick: (Technique) -> Unit) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            hint.progress?.let { (step, of) ->
+                Text(
+                    "Step $step of $of",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    textAlign = TextAlign.Center
+                )
+            }
             Text(
                 hint.message,
                 style = MaterialTheme.typography.bodyMedium,

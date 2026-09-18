@@ -1,0 +1,52 @@
+version: "3"
+
+vars:
+  PACKAGE: com.zedgama.sudoku
+  JBR: 'C:\Program Files\Android\Android Studio\jbr'
+  ADB: '{{.USERPROFILE}}\AppData\Local\Android\Sdk\platform-tools\adb.exe'
+  GRADLEW: '.\\gradlew.bat'
+
+env:
+  JAVA_HOME: '{{.JBR}}'
+
+tasks:
+  default:
+    desc: Build and install the debug APK on every connected device
+    cmds:
+      - task: install
+
+  devices:
+    desc: List connected devices/emulators
+    cmds:
+      - cmd: '"{{.ADB}}" devices'
+
+  build:
+    desc: Build the debug APK
+    cmds:
+      - cmd: '{{.GRADLEW}} :app:assembleDebug --console=plain'
+
+  install:
+    desc: Build and install the debug APK on every connected device
+    cmds:
+      - cmd: '{{.GRADLEW}} :app:installDebug --console=plain'
+
+  launch:
+    desc: Launch the app on every connected device
+    cmds:
+      - cmd: 'powershell -NoProfile -File tools/launch.ps1 -Adb "{{.ADB}}" -Package {{.PACKAGE}}'
+
+  run:
+    desc: Build, install, and launch on every connected device
+    cmds:
+      - task: install
+      - task: launch
+
+  test:
+    desc: Run JVM unit tests
+    cmds:
+      - cmd: '{{.GRADLEW}} :app:testDebugUnitTest --console=plain'
+
+  uninstall:
+    desc: Uninstall the app from the (single) connected device (wipes app data)
+    cmds:
+      - cmd: '"{{.ADB}}" uninstall {{.PACKAGE}}'

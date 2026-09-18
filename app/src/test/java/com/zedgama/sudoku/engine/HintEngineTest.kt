@@ -31,17 +31,22 @@ class HintEngineTest {
     }
 
     @Test
-    fun pinTargetMatchesSolution() {
-        val pin = HintEngine.pinTarget(puzzle, solution)
-        assertNotNull(pin)
-        assertFalse(pin!!.isReveal)
-        assertEquals(solution[pin.cellIndex], pin.digit)
-        assertTrue(pin.techniques.isNotEmpty())
+    fun planMatchesSolution() {
+        val plan = HintEngine.plan(puzzle, solution)
+        assertNotNull(plan)
+        assertFalse(plan!!.isReveal)
+        assertEquals(solution[plan.cellIndex], plan.digit)
+        assertTrue(plan.techniques.isNotEmpty())
+        assertTrue(plan.steps.size >= 2)
+        assertEquals(HintHighlight(), plan.steps.first().highlight)
+        assertEquals(plan.techniques, plan.steps.first().techniques)
+        assertEquals(listOf(plan.cellIndex), plan.steps.last().highlight.primary)
+        assertEquals(plan.digit, plan.steps.last().highlight.digit)
     }
 
     @Test
-    fun pinTargetNullOnFullBoard() {
-        assertNull(HintEngine.pinTarget(solution, solution))
+    fun planNullOnFullBoard() {
+        assertNull(HintEngine.plan(solution, solution))
     }
 
     @Test
@@ -50,12 +55,13 @@ class HintEngineTest {
         val sparse = IntArray(81)
         sparse[0] = solution[0]
         sparse[1] = solution[1]
-        val pin = HintEngine.pinTarget(sparse, solution, selected = 40)
-        assertNotNull(pin)
-        assertTrue(pin!!.isReveal)
-        assertEquals(40, pin.cellIndex)
-        assertEquals(solution[40], pin.digit)
-        assertTrue(pin.techniques.isEmpty())
+        val plan = HintEngine.plan(sparse, solution, selected = 40)
+        assertNotNull(plan)
+        assertTrue(plan!!.isReveal)
+        assertEquals(40, plan.cellIndex)
+        assertEquals(solution[40], plan.digit)
+        assertTrue(plan.techniques.isEmpty())
+        assertEquals(2, plan.steps.size)
     }
 
     @Test
@@ -63,10 +69,26 @@ class HintEngineTest {
         val sparse = IntArray(81)
         sparse[0] = solution[0]
         sparse[1] = solution[1]
-        val pin = HintEngine.pinTarget(sparse, solution)
-        assertNotNull(pin)
-        assertTrue(pin!!.isReveal)
-        assertEquals(2, pin.cellIndex)
-        assertEquals(solution[2], pin.digit)
+        val plan = HintEngine.plan(sparse, solution)
+        assertNotNull(plan)
+        assertTrue(plan!!.isReveal)
+        assertEquals(2, plan.cellIndex)
+        assertEquals(solution[2], plan.digit)
+        assertTrue(plan.techniques.isEmpty())
+        assertEquals(2, plan.steps.size)
+    }
+
+    @Test
+    fun planForReproducesPlan() {
+        val plan = HintEngine.plan(puzzle, solution)!!
+        assertEquals(plan, HintEngine.planFor(puzzle, solution, plan.cellIndex))
+    }
+
+    @Test
+    fun planForIgnoresWrongDigitInTarget() {
+        val plan = HintEngine.plan(puzzle, solution)!!
+        val dirty = puzzle.copyOf()
+        dirty[plan.cellIndex] = wrongDigitFor(plan.cellIndex)
+        assertEquals(plan, HintEngine.planFor(dirty, solution, plan.cellIndex))
     }
 }

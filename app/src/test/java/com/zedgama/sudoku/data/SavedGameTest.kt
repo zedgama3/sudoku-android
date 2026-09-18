@@ -40,11 +40,9 @@ class SavedGameTest {
     @Test
     fun jsonRoundTripWithHintEscalationFields() {
         val game = sample().copy(
-            hintLevel = 2,
-            hintPinnedCell = 40,
-            hintPinnedDigit = 5,
-            hintPinnedTechniques = listOf("LOCKED_CANDIDATES", "NAKED_SINGLE"),
-            hintPinnedIsReveal = false,
+            hintTargetCell = 40,
+            hintStepIndex = 2,
+            hintCharged = true,
             mistakeHintLevel = 1
         )
         val json = Json.encodeToString(SavedGame.serializer(), game)
@@ -67,11 +65,35 @@ class SavedGameTest {
         }"""
         val decoded = Json { ignoreUnknownKeys = true }
             .decodeFromString(SavedGame.serializer(), json)
-        assertEquals(0, decoded.hintLevel)
-        assertEquals(-1, decoded.hintPinnedCell)
-        assertEquals(0, decoded.hintPinnedDigit)
-        assertTrue(decoded.hintPinnedTechniques.isEmpty())
-        assertEquals(false, decoded.hintPinnedIsReveal)
+        assertEquals(-1, decoded.hintTargetCell)
+        assertEquals(0, decoded.hintStepIndex)
+        assertEquals(false, decoded.hintCharged)
+        assertEquals(0, decoded.mistakeHintLevel)
+    }
+
+    @Test
+    fun previousBuildHintKeysAreIgnored() {
+        val notesJson = List(81) { "0" }.joinToString(",")
+        val json = """{
+            "givens":"${TestPuzzles.KNOWN_PUZZLE}",
+            "solution":"${TestPuzzles.KNOWN_SOLUTION}",
+            "current":"${TestPuzzles.KNOWN_PUZZLE}",
+            "notes":[$notesJson],
+            "difficulty":"HARD",
+            "elapsedMillis":123000,
+            "mistakes":2,
+            "hintsUsed":1,
+            "hintLevel":2,
+            "hintPinnedCell":40,
+            "hintPinnedDigit":5,
+            "hintPinnedTechniques":["NAKED_SINGLE"],
+            "hintPinnedIsReveal":false
+        }"""
+        val decoded = Json { ignoreUnknownKeys = true }
+            .decodeFromString(SavedGame.serializer(), json)
+        assertEquals(-1, decoded.hintTargetCell)
+        assertEquals(0, decoded.hintStepIndex)
+        assertEquals(false, decoded.hintCharged)
         assertEquals(0, decoded.mistakeHintLevel)
     }
 

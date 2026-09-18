@@ -11,10 +11,14 @@ enum class Technique(val rank: Int, val label: String) {
 /** A single deduction. Placement steps have value != 0; elimination steps only refine candidates. */
 data class LogicalStep(
     val technique: Technique,
-    val cellIndex: Int,          // target cell for placements, or a representative cell for eliminations
-    val value: Int,              // placed digit, or 0 for eliminations
-    val involvedCells: List<Int>,
-    val message: String
+    val cellIndex: Int,                 // placement target, or a representative pattern cell
+    val value: Int,                     // placed digit, or 0 for eliminations
+    val involvedCells: List<Int>,       // the PATTERN cells only
+    val message: String,
+    val house: Int = -1,                // 0..26 house the pattern is read in; -1 for naked single
+    val eliminationHouse: Int = -1,     // house the candidates are removed from (eliminations)
+    val eliminatedCells: List<Int> = emptyList(),
+    val digits: List<Int> = emptyList() // digits the pattern is about
 )
 
 data class LogicalResult(val solved: Boolean, val techniques: Set<Technique>)
@@ -48,11 +52,14 @@ object LogicalSolver {
         }
     }
 
-    private fun houseName(h: Int): String = when {
+    fun houseName(h: Int): String = when {
         h < 9 -> "row ${h + 1}"
         h < 18 -> "column ${h - 8}"
         else -> "box ${h - 17}"
     }
+
+    /** The 9 cell indexes of house [h] (0..8 rows, 9..17 cols, 18..26 boxes). */
+    fun houseCells(h: Int): List<Int> = houses[h].toList()
 
     fun solve(puzzle: IntArray): LogicalResult {
         val grid = CandidateGrid(puzzle) ?: return LogicalResult(false, emptySet())
@@ -102,7 +109,8 @@ object LogicalSolver {
                     steps.add(
                         LogicalStep(
                             Technique.NAKED_SINGLE, i, d, listOf(i),
-                            "Naked single: $d is the only candidate left in this cell."
+                            "Naked single: $d is the only candidate left in this cell.",
+                            digits = listOf(d)
                         )
                     )
                 }
@@ -124,7 +132,9 @@ object LogicalSolver {
                     steps.add(
                         LogicalStep(
                             Technique.HIDDEN_SINGLE, target, d, cells.toList(),
-                            "Hidden single: $d fits only one cell in ${houseName(h)}."
+                            "Hidden single: $d fits only one cell in ${houseName(h)}.",
+                            house = h,
+                            digits = listOf(d)
                         )
                     )
                 }
@@ -133,23 +143,43 @@ object LogicalSolver {
         return steps
     }
 
-    /**
-     * Runs eliminations until at least one single exists, then picks the placement by
-     * ascending digit, then ascending cell index. Returns null if the ladder stalls first.
-     */
-    fun placementChain(puzzle: IntArray): HintChain? {
+    /** Runs eliminations until [pick] returns a single, then returns the chain; null if it stalls. */
+    private inline fun chain(
+        puzzle: IntArray,
+        pick: (List<LogicalStep>, CandidateGrid) -> LogicalStep?
+    ): HintChain? {
         val grid = CandidateGrid(puzzle) ?: return null
         val eliminations = mutableListOf<LogicalStep>()
         while (true) {
-            val singles = enumerateSingles(grid)
-            if (singles.isNotEmpty()) {
-                val placement = singles.minWith(compareBy({ it.value }, { it.cellIndex }))
-                return HintChain(eliminations, placement)
-            }
-            val elimination = nextElimination(grid) ?: return null
-            eliminations.add(elimination)
+            pick(enumerateSingles(grid), grid)?.let { return HintChain(eliminations, it) }
+            eliminations.add(nextElimination(grid) ?: return null)
         }
     }
+
+    /** The easiest available placement: see [easiestFirst]. */
+    fun easiestChain(puzzle: IntArray): HintChain? =
+        chain(puzzle) { singles, grid -> singles.minWithOrNull(easiestFirst(grid)) }
+
+    /** The chain that makes [target] a single, if the ladder gets there without placing anything else. */
+    fun chainFor(puzzle: IntArray, target: Int): HintChain? =
+        chain(puzzle) { singles, _ -> singles.firstOrNull { it.cellIndex == target } }
+
+    /**
+     * Naked singles before hidden singles; among naked singles the most filled peers (easiest to
+     * see); among hidden singles the house with the fewest empty cells; then cell index, then digit.
+     * Elimination count is implicit: the loop stops the first time any single exists.
+     */
+    private fun easiestFirst(grid: CandidateGrid): Comparator<LogicalStep> = compareBy(
+        { if (it.technique == Technique.NAKED_SINGLE) 0 else 1 },
+        {
+            if (it.technique == Technique.NAKED_SINGLE)
+                -peersOf(it.cellIndex).count { p -> grid.values[p] != 0 }
+            else
+                houseCells(it.house).count { c -> grid.values[c] == 0 }
+        },
+        { it.cellIndex },
+        { it.value }
+    )
 
     private fun nextElimination(g: CandidateGrid): LogicalStep? =
         lockedCandidates(g) ?: nakedPair(g) ?: hiddenPair(g)
@@ -163,7 +193,8 @@ object LogicalSolver {
                 g.place(i, d)
                 return LogicalStep(
                     Technique.NAKED_SINGLE, i, d, listOf(i),
-                    "Naked single: $d is the only candidate left in this cell."
+                    "Naked single: $d is the only candidate left in this cell.",
+                    digits = listOf(d)
                 )
             }
         }
@@ -187,7 +218,9 @@ object LogicalSolver {
                     g.place(target, d)
                     return LogicalStep(
                         Technique.HIDDEN_SINGLE, target, d, cells.toList(),
-                        "Hidden single: $d fits only one cell in ${houseName(h)}."
+                        "Hidden single: $d fits only one cell in ${houseName(h)}.",
+                        house = h,
+                        digits = listOf(d)
                     )
                 }
             }
@@ -205,11 +238,12 @@ object LogicalSolver {
                 if (spots.size < 2) continue
                 val rows = spots.map { rowOf(it) }.distinct()
                 val cols = spots.map { colOf(it) }.distinct()
-                val line: IntArray? = when {
-                    rows.size == 1 -> houses[rows[0]]
-                    cols.size == 1 -> houses[9 + cols[0]]
-                    else -> null
+                val lineHouse: Int = when {
+                    rows.size == 1 -> rows[0]
+                    cols.size == 1 -> 9 + cols[0]
+                    else -> -1
                 }
+                val line: IntArray? = if (lineHouse >= 0) houses[lineHouse] else null
                 if (line != null) {
                     val eliminated = mutableListOf<Int>()
                     for (i in line) {
@@ -220,8 +254,12 @@ object LogicalSolver {
                     }
                     if (eliminated.isNotEmpty()) {
                         return LogicalStep(
-                            Technique.LOCKED_CANDIDATES, spots[0], 0, spots + eliminated,
-                            "Locked candidates: in box ${b + 1}, $d is confined to one line, removing it elsewhere on that line."
+                            Technique.LOCKED_CANDIDATES, spots[0], 0, spots,
+                            "Locked candidates: in box ${b + 1}, $d is confined to one line, removing it elsewhere on that line.",
+                            house = 18 + b,
+                            eliminationHouse = lineHouse,
+                            eliminatedCells = eliminated.toList(),
+                            digits = listOf(d)
                         )
                     }
                 }
@@ -245,8 +283,12 @@ object LogicalSolver {
                     }
                     if (eliminated.isNotEmpty()) {
                         return LogicalStep(
-                            Technique.LOCKED_CANDIDATES, spots[0], 0, spots + eliminated,
-                            "Locked candidates: in ${houseName(h)}, $d is confined to one box, removing it from the rest of the box."
+                            Technique.LOCKED_CANDIDATES, spots[0], 0, spots,
+                            "Locked candidates: in ${houseName(h)}, $d is confined to one box, removing it from the rest of the box.",
+                            house = h,
+                            eliminationHouse = 18 + boxes[0],
+                            eliminatedCells = eliminated.toList(),
+                            digits = listOf(d)
                         )
                     }
                 }
@@ -279,8 +321,12 @@ object LogicalSolver {
                     }
                     if (eliminated.isNotEmpty()) {
                         return LogicalStep(
-                            Technique.NAKED_PAIR, i, 0, listOf(i, j) + eliminated,
-                            "Naked pair in ${houseName(h)}: two cells share the same two candidates, removing them from the rest of the house."
+                            Technique.NAKED_PAIR, i, 0, listOf(i, j),
+                            "Naked pair in ${houseName(h)}: two cells share the same two candidates, removing them from the rest of the house.",
+                            house = h,
+                            eliminationHouse = h,
+                            eliminatedCells = eliminated.toList(),
+                            digits = (1..9).filter { d -> mask and (1 shl (d - 1)) != 0 }
                         )
                     }
                 }
@@ -315,7 +361,11 @@ object LogicalSolver {
                 if (changed) {
                     return LogicalStep(
                         Technique.HIDDEN_PAIR, s1[0], 0, s1,
-                        "Hidden pair in ${houseName(h)}: $d1 and $d2 can only go in the same two cells, clearing their other candidates."
+                        "Hidden pair in ${houseName(h)}: $d1 and $d2 can only go in the same two cells, clearing their other candidates.",
+                        house = h,
+                        eliminationHouse = h,
+                        eliminatedCells = s1,
+                        digits = listOf(d1, d2)
                     )
                 }
             }
