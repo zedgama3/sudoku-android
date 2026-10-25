@@ -30,6 +30,7 @@ fun BoardCanvas(
     paused: Boolean,
     onCellTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onCellLongPress: (Int) -> Unit = {},
     hint: HintHighlight? = null
 ) {
     val colors = MaterialTheme.colorScheme
@@ -38,12 +39,16 @@ fun BoardCanvas(
     Canvas(
         modifier = modifier.pointerInput(paused) {
             if (!paused) {
-                detectTapGestures { offset ->
+                fun indexAt(offset: Offset): Int {
                     val cell = size.width / 9f
                     val col = (offset.x / cell).toInt().coerceIn(0, 8)
                     val row = (offset.y / cell).toInt().coerceIn(0, 8)
-                    onCellTap(row * 9 + col)
+                    return row * 9 + col
                 }
+                detectTapGestures(
+                    onLongPress = { onCellLongPress(indexAt(it)) },
+                    onTap = { onCellTap(indexAt(it)) }
+                )
             }
         }
     ) {

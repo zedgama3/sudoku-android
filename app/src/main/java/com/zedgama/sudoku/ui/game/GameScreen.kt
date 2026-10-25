@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Pin
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
@@ -36,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.layout.heightIn
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zedgama.sudoku.data.model.TapAction
 import com.zedgama.sudoku.engine.Technique
 
 @Composable
@@ -98,6 +100,10 @@ fun GameScreen(
                 hint = state.hint?.highlight,
                 paused = state.paused,
                 onCellTap = viewModel::onCellTap,
+                onCellLongPress = { index ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.onCellLongPress(index)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
@@ -119,11 +125,17 @@ fun GameScreen(
                 IconButton(onClick = viewModel::onErase) {
                     Icon(Icons.Filled.Backspace, contentDescription = "Erase")
                 }
+                // Swap toggle: while on, tap and long-press trade actions. It shows what a tap
+                // switches *to*, so with tap=Mark it reads as "Enter" and vice versa.
                 FilledIconToggleButton(
                     checked = state.notesMode,
                     onCheckedChange = { viewModel.onToggleNotes() }
                 ) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Notes mode")
+                    if (state.tapAction == TapAction.MARK) {
+                        Icon(Icons.Filled.Pin, contentDescription = "Tap enters numbers")
+                    } else {
+                        Icon(Icons.Filled.Edit, contentDescription = "Tap marks notes")
+                    }
                 }
                 IconButton(onClick = viewModel::onHint) {
                     Icon(Icons.Filled.Lightbulb, contentDescription = "Hint")
@@ -138,6 +150,10 @@ fun GameScreen(
                 onDigit = { d ->
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.onDigit(d)
+                },
+                onDigitLongPress = { d ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.onDigitLongPress(d)
                 }
             )
 
@@ -161,9 +177,17 @@ fun GameScreen(
                         onTechniqueClick = { technique ->
                             viewModel.onOpenExplainer()
                             onOpenTechnique?.invoke(technique)
-                        }
+                        },
+                        onFlag = if (state.hintLogging) viewModel::onFlagHint else null
                     )
                 }
+            }
+            state.flagNotice?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(Modifier.height(4.dp))

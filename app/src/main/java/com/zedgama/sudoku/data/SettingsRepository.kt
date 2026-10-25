@@ -5,7 +5,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.zedgama.sudoku.data.model.AutoSelect
 import com.zedgama.sudoku.data.model.InputMode
+import com.zedgama.sudoku.data.model.TapAction
 import com.zedgama.sudoku.data.model.ThemeMode
 import com.zedgama.sudoku.data.model.UserSettings
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +24,11 @@ class SettingsRepository(private val context: Context) {
         val MISTAKE_LIMIT = booleanPreferencesKey("mistake_limit")
         val SHOW_TIMER = booleanPreferencesKey("show_timer")
         val AUTO_REMOVE_NOTES = booleanPreferencesKey("auto_remove_notes")
+        val TAP_ACTION = stringPreferencesKey("tap_action")
+        val ALLOW_OVERWRITE = booleanPreferencesKey("allow_overwrite")
+        val TAP_REMOVES_MARK = booleanPreferencesKey("tap_removes_mark")
+        val AUTO_SELECT = stringPreferencesKey("auto_select")
+        val HINT_LOGGING = booleanPreferencesKey("hint_logging")
     }
 
     val settings: Flow<UserSettings> = context.settingsDataStore.data.map { p ->
@@ -33,7 +40,14 @@ class SettingsRepository(private val context: Context) {
             mistakeChecking = p[Keys.MISTAKE_CHECKING] ?: true,
             mistakeLimitEnabled = p[Keys.MISTAKE_LIMIT] ?: false,
             showTimer = p[Keys.SHOW_TIMER] ?: true,
-            autoRemoveNotes = p[Keys.AUTO_REMOVE_NOTES] ?: true
+            autoRemoveNotes = p[Keys.AUTO_REMOVE_NOTES] ?: true,
+            tapAction = p[Keys.TAP_ACTION]?.let { runCatching { TapAction.valueOf(it) }.getOrNull() }
+                ?: TapAction.MARK,
+            allowOverwrite = p[Keys.ALLOW_OVERWRITE] ?: false,
+            tapRemovesMark = p[Keys.TAP_REMOVES_MARK] ?: true,
+            autoSelect = p[Keys.AUTO_SELECT]?.let { runCatching { AutoSelect.valueOf(it) }.getOrNull() }
+                ?: AutoSelect.WHEN_FILLED,
+            hintLogging = p[Keys.HINT_LOGGING] ?: false
         )
     }
 
@@ -59,5 +73,25 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAutoRemoveNotes(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_REMOVE_NOTES] = enabled }
+    }
+
+    suspend fun setTapAction(action: TapAction) {
+        context.settingsDataStore.edit { it[Keys.TAP_ACTION] = action.name }
+    }
+
+    suspend fun setAllowOverwrite(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.ALLOW_OVERWRITE] = enabled }
+    }
+
+    suspend fun setTapRemovesMark(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.TAP_REMOVES_MARK] = enabled }
+    }
+
+    suspend fun setAutoSelect(mode: AutoSelect) {
+        context.settingsDataStore.edit { it[Keys.AUTO_SELECT] = mode.name }
+    }
+
+    suspend fun setHintLogging(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.HINT_LOGGING] = enabled }
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,7 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zedgama.sudoku.BuildConfig
+import com.zedgama.sudoku.data.model.AutoSelect
 import com.zedgama.sudoku.data.model.InputMode
+import com.zedgama.sudoku.data.model.TapAction
 import com.zedgama.sudoku.data.model.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,6 +94,40 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 ) { Text("Digit first") }
             }
 
+            ChoiceRow(
+                title = "Tap action",
+                subtitle = "A long-press does the other",
+                options = listOf(TapAction.MARK to "Mark", TapAction.ENTER to "Enter"),
+                selected = settings.tapAction,
+                onSelect = viewModel::setTapAction
+            )
+            if (settings.inputMode == InputMode.DIGIT_FIRST) {
+                ChoiceRow(
+                    title = "Select a matching cell when choosing a number",
+                    subtitle = "Moves the selection to the nearest cell with that number. " +
+                        "\"When filled\" only moves it off a cell that holds a different number",
+                    options = listOf(
+                        AutoSelect.ALWAYS to "Always",
+                        AutoSelect.WHEN_FILLED to "When filled",
+                        AutoSelect.NEVER to "Never"
+                    ),
+                    selected = settings.autoSelect,
+                    onSelect = viewModel::setAutoSelect
+                )
+            }
+            SwitchRow(
+                "Allow overwriting entries",
+                "Entering a number replaces the one already there. When off, erase it first",
+                settings.allowOverwrite,
+                viewModel::setAllowOverwrite
+            )
+            SwitchRow(
+                "Tap removes a mark",
+                "Marking a number that's already marked removes it. When off, marks only come off with erase",
+                settings.tapRemovesMark,
+                viewModel::setTapRemovesMark
+            )
+
             SwitchRow(
                 "Mistake checking",
                 "Highlight entries that don't match the solution. When off, hints can find mistakes for you",
@@ -114,6 +152,48 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 settings.autoRemoveNotes,
                 viewModel::setAutoRemoveNotes
             )
+
+            if (BuildConfig.DEBUG) {
+                SectionLabel("Developer")
+                SwitchRow(
+                    "Hint logging",
+                    "Record each hint with its board (up to 10 MB). Pull with `task hintlog`",
+                    settings.hintLogging,
+                    viewModel::setHintLogging
+                )
+                TextButton(onClick = { viewModel.clearHintLog() }) { Text("Clear hint log") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> ChoiceRow(
+    title: String,
+    subtitle: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit
+) {
+    Column(Modifier.padding(top = 10.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            options.forEachIndexed { index, (value, label) ->
+                SegmentedButton(
+                    selected = selected == value,
+                    onClick = { onSelect(value) },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size)
+                ) { Text(label) }
+            }
         }
     }
 }

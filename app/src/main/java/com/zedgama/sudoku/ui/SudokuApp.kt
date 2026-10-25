@@ -86,7 +86,8 @@ fun SudokuApp() {
                         route.resume,
                         createSavedStateHandle(),
                         container.settingsRepository,
-                        container.statsRepository
+                        container.statsRepository,
+                        container.hintLogger
                     )
                 }
                 GameScreen(
@@ -115,7 +116,7 @@ fun SudokuApp() {
             }
             composable<SettingsRoute> {
                 val vm: SettingsViewModel =
-                    viewModel { SettingsViewModel(container.settingsRepository) }
+                    viewModel { SettingsViewModel(container.settingsRepository, container.hintLogger) }
                 SettingsScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
         }

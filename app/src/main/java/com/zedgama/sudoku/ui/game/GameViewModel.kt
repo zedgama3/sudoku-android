@@ -3,14 +3,19 @@ package com.zedgama.sudoku.ui.game
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zedgama.sudoku.BuildConfig
 import com.zedgama.sudoku.data.GameRepository
+import com.zedgama.sudoku.data.HintLogEntry
+import com.zedgama.sudoku.data.HintLogger
 import com.zedgama.sudoku.data.SettingsRepository
 import com.zedgama.sudoku.data.StatsRepository
+import com.zedgama.sudoku.data.model.AutoSelect
 import com.zedgama.sudoku.data.model.InputMode
 import com.zedgama.sudoku.data.model.SavedGame
 import com.zedgama.sudoku.data.model.boardFrom
 import com.zedgama.sudoku.data.model.toBoard
 import com.zedgama.sudoku.data.model.toSnapshot
+import com.zedgama.sudoku.data.toLogged
 import com.zedgama.sudoku.engine.Board
 import com.zedgama.sudoku.engine.Difficulty
 import com.zedgama.sudoku.engine.HintEngine
@@ -32,7 +37,8 @@ class GameViewModel(
     resume: Boolean = false,
     savedStateHandle: SavedStateHandle? = null,
     private val settingsRepository: SettingsRepository? = null,
-    private val statsRepository: StatsRepository? = null
+    private val statsRepository: StatsRepository? = null,
+    private val hintLogger: HintLogger? = null
 ) : ViewModel() {
 
     // After process death the nav back stack is restored and this ViewModel is
@@ -56,6 +62,9 @@ class GameViewModel(
     private val hintEscalation = HintEscalation()
     private var inForeground = true
     private var autoRemoveNotes = true
+    private var allowOverwrite = false
+    private var tapRemovesMark = true
+    private var autoSelect = AutoSelect.WHEN_FILLED
     private var resultRecorded = false
 
     init {
@@ -84,9 +93,14 @@ class GameViewModel(
             viewModelScope.launch {
                 repo.settings.collect { s ->
                     autoRemoveNotes = s.autoRemoveNotes
+                    allowOverwrite = s.allowOverwrite
+                    tapRemovesMark = s.tapRemovesMark
+                    autoSelect = s.autoSelect
                     _state.update {
                         it.copy(
                             inputMode = s.inputMode,
+                            tapAction = s.tapAction,
+                            hintLogging = BuildConfig.DEBUG && s.hintLogging,
                             mistakeChecking = s.mistakeChecking,
                             showTimer = s.showTimer,
                             mistakeLimit = if (s.mistakeLimitEnabled) MISTAKE_LIMIT else null,
@@ -199,25 +213,39 @@ class GameViewModel(
         viewModelScope.launch { repository.saveGame(game) }
     }
 
-    fun onCellTap(index: Int) {
+    fun onCellTap(index: Int) = cellGesture(index, longPress = false)
+
+    fun onCellLongPress(index: Int) = cellGesture(index, longPress = true)
+
+    private fun cellGesture(index: Int, longPress: Boolean) {
         val s = _state.value
         if (s.loading || s.paused || s.isWon || s.isFailed) return
         if (s.inputMode == InputMode.DIGIT_FIRST && s.armedDigit != null) {
-            applyDigit(index, s.armedDigit)
+            applyDigit(index, s.armedDigit, asMark = s.tapMarks != longPress)
         } else {
             _state.update { it.copy(selectedCell = index) }
         }
     }
 
-    fun onDigit(digit: Int) {
+    fun onDigit(digit: Int) = digitGesture(digit, longPress = false)
+
+    fun onDigitLongPress(digit: Int) = digitGesture(digit, longPress = true)
+
+    private fun digitGesture(digit: Int, longPress: Boolean) {
         val s = _state.value
         if (s.loading || s.paused || s.isWon || s.isFailed) return
         if (s.inputMode == InputMode.DIGIT_FIRST) {
+            // In digit-first the mark/enter choice happens on the board, so a pad long-press just arms.
+            val arming = s.armedDigit != digit
+            val jumpTo = if (arming) pickAutoSelectCell(s.board, s.selectedCell, digit, autoSelect) else null
             _state.update {
-                it.copy(armedDigit = if (it.armedDigit == digit) null else digit)
+                it.copy(
+                    armedDigit = if (arming) digit else null,
+                    selectedCell = jumpTo ?: it.selectedCell
+                )
             }
         } else {
-            s.selectedCell?.let { applyDigit(it, digit) }
+            s.selectedCell?.let { applyDigit(it, digit, asMark = s.tapMarks != longPress) }
         }
     }
 
@@ -273,7 +301,8 @@ class GameViewModel(
             step.text,
             step.highlight,
             step.techniques,
-            progress = hintEscalation.stepIndex + 1 to plan.steps.size
+            progress = hintEscalation.stepIndex + 1 to plan.steps.size,
+            previous = plan.steps.take(hintEscalation.stepIndex).map { it.text }
         )
     }
 
@@ -344,6 +373,42 @@ class GameViewModel(
             }
             HintEscalation.Outcome.None -> Unit
         }
+        logHint(s, outcome)
+    }
+
+    /** Records the press against the board it was asked on, plus what the card now says. */
+    private fun logHint(before: GameUiState, outcome: HintEscalation.Outcome) {
+        val logger = hintLogger ?: return
+        if (!_state.value.hintLogging) return
+        val step = outcome as? HintEscalation.Outcome.Step
+        val entry = HintLogEntry(
+            time = System.currentTimeMillis(),
+            version = BuildConfig.VERSION_NAME,
+            difficulty = before.difficulty.name,
+            givens = givens,
+            solution = solutionString,
+            current = before.board.cells.joinToString("") { it.value.toString() },
+            notes = before.board.cells.map { it.notes },
+            selected = before.selectedCell,
+            mistakeChecking = before.mistakeChecking,
+            outcome = outcome::class.simpleName ?: "Unknown",
+            charged = outcome.charged,
+            message = _state.value.hint?.message,
+            stepIndex = step?.index,
+            plan = step?.plan?.toLogged()
+        )
+        viewModelScope.launch { logger.log(entry) }
+    }
+
+    /** Dev: marks the last logged hint as suspicious and says so briefly on screen. */
+    fun onFlagHint() {
+        val logger = hintLogger ?: return
+        viewModelScope.launch {
+            val flagged = logger.flagLast()
+            _state.update { it.copy(flagNotice = if (flagged) "Flagged" else "Nothing logged yet") }
+            delay(1500)
+            _state.update { it.copy(flagNotice = null) }
+        }
     }
 
     private fun placeHint(index: Int, digit: Int, charged: Boolean, message: String) {
@@ -367,27 +432,21 @@ class GameViewModel(
         _state.update { it.copy(paused = true) }
     }
 
-    private fun applyDigit(index: Int, digit: Int) {
+    private fun applyDigit(index: Int, digit: Int, asMark: Boolean) {
         val s = _state.value
-        val cell = s.board[index]
-        if (cell.isGiven) {
-            _state.update { it.copy(selectedCell = index) }
-            return
-        }
+        val updated = resolveEntry(s.board[index], digit, asMark, allowOverwrite, tapRemovesMark)
+        _state.update { it.copy(selectedCell = index) }
+        if (updated == null) return
         pushUndo(s.board)
+        val placed = s.board.with(index, updated)
         val newBoard: Board
         var mistake = false
-        if (s.notesMode && cell.value == 0) {
-            newBoard = s.board.with(index, cell.copy(notes = cell.notes xor (1 shl (digit - 1))))
-        } else if (cell.value == digit) {
-            // Tapping the same digit clears the cell
-            newBoard = s.board.with(index, cell.copy(value = 0))
+        if (asMark) {
+            newBoard = placed
         } else {
-            val placed = s.board.with(index, cell.copy(value = digit, notes = 0))
             newBoard = if (autoRemoveNotes) clearPeerNotes(placed, index, digit) else placed
             mistake = s.mistakeChecking && solution[index] != digit
         }
-        _state.update { it.copy(selectedCell = index) }
         updateBoard(newBoard, countMistake = mistake)
     }
 

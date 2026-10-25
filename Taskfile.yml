@@ -46,6 +46,11 @@ tasks:
     cmds:
       - cmd: '{{.GRADLEW}} :app:testDebugUnitTest --console=plain'
 
+  hintlog:
+    desc: Pull the dev hint log into ./hintlog (pass DEVICE=<serial> when several are attached)
+    cmds:
+      - cmd: '"{{.ADB}}" {{if .DEVICE}}-s {{.DEVICE}} {{end}}pull /sdcard/Android/data/{{.PACKAGE}}/files/hintlog .'
+
   uninstall:
     desc: Uninstall the app from the (single) connected device (wipes app data)
     cmds:
