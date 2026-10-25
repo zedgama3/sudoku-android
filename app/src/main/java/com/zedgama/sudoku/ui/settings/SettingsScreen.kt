@@ -1,5 +1,6 @@
 package com.zedgama.sudoku.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,9 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zedgama.sudoku.BuildConfig
+import com.zedgama.sudoku.R
 import com.zedgama.sudoku.data.model.AutoSelect
 import com.zedgama.sudoku.data.model.InputMode
 import com.zedgama.sudoku.data.model.TapAction
@@ -35,7 +38,7 @@ import com.zedgama.sudoku.data.model.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onAbout: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -162,6 +165,21 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     viewModel::setHintLogging
                 )
                 TextButton(onClick = { viewModel.clearHintLog() }) { Text("Clear hint log") }
+            }
+
+            SectionLabel("About")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAbout)
+                    .padding(vertical = 10.dp)
+            ) {
+                Text("About ${stringResource(R.string.app_name)}", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Version, developer, and source code",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

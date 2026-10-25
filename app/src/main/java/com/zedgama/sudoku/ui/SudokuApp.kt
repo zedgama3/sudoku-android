@@ -16,6 +16,7 @@ import com.zedgama.sudoku.data.model.ThemeMode
 import com.zedgama.sudoku.data.model.UserSettings
 import com.zedgama.sudoku.engine.Difficulty
 import com.zedgama.sudoku.engine.Technique
+import com.zedgama.sudoku.ui.about.AboutScreen
 import com.zedgama.sudoku.ui.game.GameScreen
 import com.zedgama.sudoku.ui.game.GameViewModel
 import com.zedgama.sudoku.ui.home.ContinueInfo
@@ -42,6 +43,9 @@ object StatsRoute
 
 @Serializable
 object SettingsRoute
+
+@Serializable
+object AboutRoute
 
 @Composable
 fun SudokuApp() {
@@ -117,7 +121,14 @@ fun SudokuApp() {
             composable<SettingsRoute> {
                 val vm: SettingsViewModel =
                     viewModel { SettingsViewModel(container.settingsRepository, container.hintLogger) }
-                SettingsScreen(viewModel = vm, onBack = { navController.popBackStack() })
+                SettingsScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onAbout = { navController.navigate(AboutRoute) }
+                )
+            }
+            composable<AboutRoute> {
+                AboutScreen(onBack = { navController.popBackStack() })
             }
         }
     }

@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Short commit the build came from, shown on the About screen. "-dirty" marks uncommitted
+// changes; "unknown" means the source wasn't a git checkout (or git isn't installed).
+fun git(vararg args: String): String? = runCatching {
+    providers.exec { commandLine("git", *args) }.standardOutput.asText.get().trim()
+}.getOrNull()
+val gitSha = git("rev-parse", "--short", "HEAD")
+    ?.let { sha -> if (git("status", "--porcelain").isNullOrEmpty()) sha else "$sha-dirty" }
+    ?: "unknown"
+
 android {
     namespace = "com.zedgama.sudoku"
     compileSdk = 37
@@ -14,6 +23,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
     // Upload key for Play, read from ~/.gradle/gradle.properties (see DEPLOYING.md). Without it
