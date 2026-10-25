@@ -29,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val TAP_REMOVES_MARK = booleanPreferencesKey("tap_removes_mark")
         val AUTO_SELECT = stringPreferencesKey("auto_select")
         val HINT_LOGGING = booleanPreferencesKey("hint_logging")
+        val SETUP_DONE = booleanPreferencesKey("setup_done")
     }
 
     val settings: Flow<UserSettings> = context.settingsDataStore.data.map { p ->
@@ -47,7 +48,8 @@ class SettingsRepository(private val context: Context) {
             tapRemovesMark = p[Keys.TAP_REMOVES_MARK] ?: true,
             autoSelect = p[Keys.AUTO_SELECT]?.let { runCatching { AutoSelect.valueOf(it) }.getOrNull() }
                 ?: AutoSelect.WHEN_FILLED,
-            hintLogging = p[Keys.HINT_LOGGING] ?: false
+            hintLogging = p[Keys.HINT_LOGGING] ?: false,
+            setupDone = p[Keys.SETUP_DONE] ?: false
         )
     }
 
@@ -93,5 +95,9 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHintLogging(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.HINT_LOGGING] = enabled }
+    }
+
+    suspend fun setSetupDone() {
+        context.settingsDataStore.edit { it[Keys.SETUP_DONE] = true }
     }
 }

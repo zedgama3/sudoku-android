@@ -34,5 +34,6 @@ class SettingsViewModel(
     fun setTapRemovesMark(v: Boolean) = viewModelScope.launch { repository.setTapRemovesMark(v) }
     fun setAutoSelect(m: AutoSelect) = viewModelScope.launch { repository.setAutoSelect(m) }
     fun setHintLogging(v: Boolean) = viewModelScope.launch { repository.setHintLogging(v) }
+    fun completeSetup() = viewModelScope.launch { repository.setSetupDone() }
     fun clearHintLog() = viewModelScope.launch { hintLogger?.clear() }
 }

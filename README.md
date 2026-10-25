@@ -26,6 +26,8 @@ No ads, no accounts, no network access: everything runs and stays on your device
   Earlier steps stay on the card below the current one. Debug builds can log each
   hint with its board (Settings → Developer → Hint logging, ≤10 MB rolling) for
   review; `task hintlog` pulls it over USB
+- **First-run setup**: one screen asks how you like to enter numbers, what a tap does, and
+  whether mistakes are flagged, so the defaults never surprise a new player
 - **Mistake checking** with optional 3-mistake limit
 - **Undo/redo**, timer with pause (board hidden while paused), win detection
 - **Save/resume** — the game auto-saves on every action and survives process death

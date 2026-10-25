@@ -21,5 +21,7 @@ data class UserSettings(
     val allowOverwrite: Boolean = false,
     val tapRemovesMark: Boolean = true,
     val autoSelect: AutoSelect = AutoSelect.WHEN_FILLED,
-    val hintLogging: Boolean = false
+    val hintLogging: Boolean = false,
+    /** False until the first-run setup screen has been completed. */
+    val setupDone: Boolean = false
 )

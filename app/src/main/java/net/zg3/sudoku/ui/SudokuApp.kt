@@ -2,6 +2,10 @@ package net.zg3.sudoku.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,6 +21,7 @@ import net.zg3.sudoku.data.model.UserSettings
 import net.zg3.sudoku.engine.Difficulty
 import net.zg3.sudoku.engine.Technique
 import net.zg3.sudoku.ui.about.AboutScreen
+import net.zg3.sudoku.ui.setup.SetupScreen
 import net.zg3.sudoku.ui.game.GameScreen
 import net.zg3.sudoku.ui.game.GameViewModel
 import net.zg3.sudoku.ui.home.ContinueInfo
@@ -27,6 +32,7 @@ import net.zg3.sudoku.ui.stats.StatsScreen
 import net.zg3.sudoku.ui.stats.StatsViewModel
 import net.zg3.sudoku.ui.technique.TechniqueScreen
 import net.zg3.sudoku.ui.theme.SudokuTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -47,6 +53,9 @@ object SettingsRoute
 @Serializable
 object AboutRoute
 
+@Serializable
+object SetupRoute
+
 @Composable
 fun SudokuApp() {
     val navController = rememberNavController()
@@ -61,8 +70,25 @@ fun SudokuApp() {
         ThemeMode.DARK -> true
     }
 
+    // Read once from storage: the start destination must not change while the graph is up.
+    var startRoute by remember { mutableStateOf<Any?>(null) }
+    LaunchedEffect(Unit) {
+        startRoute = if (container.settingsRepository.settings.first().setupDone) HomeRoute else SetupRoute
+    }
+    val start = startRoute ?: return
+
     SudokuTheme(darkTheme = darkTheme) {
-        NavHost(navController = navController, startDestination = HomeRoute) {
+        NavHost(navController = navController, startDestination = start) {
+            composable<SetupRoute> {
+                val vm: SettingsViewModel =
+                    viewModel { SettingsViewModel(container.settingsRepository) }
+                SetupScreen(
+                    viewModel = vm,
+                    onDone = {
+                        navController.navigate(HomeRoute) { popUpTo<SetupRoute> { inclusive = true } }
+                    }
+                )
+            }
             composable<HomeRoute> {
                 val saved by container.gameRepository.savedGameFlow
                     .collectAsStateWithLifecycle(initialValue = null)
