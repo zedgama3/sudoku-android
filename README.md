@@ -1,6 +1,7 @@
 # Sudoku
 
 A full-featured native Android sudoku game built with Kotlin and Jetpack Compose (Material 3).
+No ads, no accounts, no network access: everything runs and stays on your device.
 
 ## Features
 
@@ -31,6 +32,12 @@ A full-featured native Android sudoku game built with Kotlin and Jetpack Compose
 - **Statistics** per difficulty: games, win rate, best/average time, streaks
 - **Light/dark theme** following the system, with manual override
 
+## Privacy
+
+The app requests no permissions, makes no network connections and collects no data. Games,
+settings and statistics are stored only on the device (and in Android's own device backup, if
+you have it enabled).
+
 ## Building
 
 Open in Android Studio, or from the command line:
@@ -57,3 +64,17 @@ Single `:app` module, three layers:
   grid, digits, and notes; tap hit-testing by integer division).
 
 Manual DI via `AppContainer` — no Hilt, no Room.
+
+## Contributing
+
+Issues and pull requests are welcome. Please keep each pull request to **one change**, and
+read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+
+## License
+
+Copyright © 2026 Jared Fowkes.
+
+Licensed under the [Mozilla Public License 2.0](LICENSE). You're free to use, modify and
+distribute this code, including in your own apps. If you distribute modified versions of
+these files, the MPL requires you to make those modified files' source available under the
+same license and to keep the copyright notices.

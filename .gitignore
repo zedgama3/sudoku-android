@@ -1,14 +1,36 @@
-*.iml
+# Gradle / Kotlin
 .gradle/
-/local.properties
-/.idea/
-.DS_Store
-/build
+.kotlin/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-**/build/
 
-.kotlin/
+# Local machine config (SDK path, etc.)
+local.properties
+
+# IDE
+*.iml
+/.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Release signing — never commit keys or their passwords
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Build outputs copied out of build/ (Android Studio's "Generate Signed Bundle" default)
+/app/release/
+*.apk
+*.aab
+
+# Play Console service-account credentials
+play-service-account*.json
+
+# Debug hint log pulled by `task hintlog`
 /hintlog/
