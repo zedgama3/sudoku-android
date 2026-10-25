@@ -68,7 +68,41 @@ the target with `adb -s <serial> install ...` (serials come from `adb devices`).
 
 ## Release builds
 
-Everything above installs the **debug** build, which is what day-to-day testing
-uses. A Play-Store-ready release build (`:app:assembleRelease`) would additionally
-need a signing keystore configured in `app/build.gradle.kts` — not set up in this
-project yet.
+Day-to-day testing uses the **debug** build above. The Play Store gets a **release** bundle
+signed with the upload key. Without the key configured, release builds still compile but come
+out unsigned, so contributors don't need it.
+
+### One-time signing setup (maintainer only)
+
+1. Create the upload key (keep it **outside** the repo; `*.jks` is gitignored anyway):
+
+   ```powershell
+   mkdir $HOME\keys -Force
+   & "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -genkeypair -v `
+     -keystore "$HOME\keys\sudoku-upload.jks" -alias upload -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. Add to `%USERPROFILE%\.gradle\gradle.properties` (your user-level Gradle config, never
+   committed):
+
+   ```properties
+   SUDOKU_UPLOAD_STORE_FILE=C:/Users/<you>/keys/sudoku-upload.jks
+   SUDOKU_UPLOAD_STORE_PASSWORD=...
+   SUDOKU_UPLOAD_KEY_ALIAS=upload
+   SUDOKU_UPLOAD_KEY_PASSWORD=...
+   ```
+
+3. Back up the `.jks` and both passwords (e.g. in a password manager). Play App Signing holds
+   the real app signing key, so a lost upload key can be reset through Play Console support,
+   but that takes time.
+
+### Building a release
+
+```powershell
+task release-apk       # minified release APK; install it and play a game to catch R8 issues
+task install-release   # same, then installs it (uninstall the debug build first: different key)
+task bundle            # app\build\outputs\bundle\release\app-release.aab → upload to Play Console
+```
+
+Before each upload, bump `versionCode` (and `versionName`) in `app/build.gradle.kts`; Play
+rejects a `versionCode` it has already seen.

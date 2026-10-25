@@ -16,8 +16,23 @@ android {
         versionName = "1.0"
     }
 
+    // Upload key for Play, read from ~/.gradle/gradle.properties (see DEPLOYING.md). Without it
+    // the release build is left unsigned, so the project still builds for everyone else.
+    val uploadStoreFile = providers.gradleProperty("SUDOKU_UPLOAD_STORE_FILE").orNull
+    signingConfigs {
+        if (uploadStoreFile != null) {
+            create("release") {
+                storeFile = file(uploadStoreFile)
+                storePassword = providers.gradleProperty("SUDOKU_UPLOAD_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("SUDOKU_UPLOAD_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("SUDOKU_UPLOAD_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

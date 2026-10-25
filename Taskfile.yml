@@ -46,6 +46,22 @@ tasks:
     cmds:
       - cmd: '{{.GRADLEW}} :app:testDebugUnitTest --console=plain'
 
+  bundle:
+    desc: Build the signed release bundle for Play → app/build/outputs/bundle/release/app-release.aab
+    cmds:
+      - cmd: '{{.GRADLEW}} :app:bundleRelease --console=plain'
+
+  release-apk:
+    desc: Build the signed, minified release APK to smoke-test R8 on a device
+    cmds:
+      - cmd: '{{.GRADLEW}} :app:assembleRelease --console=plain'
+
+  install-release:
+    desc: Build and install the release APK on the single connected device (uninstall a debug build first)
+    cmds:
+      - task: release-apk
+      - cmd: '"{{.ADB}}" install -r app/build/outputs/apk/release/app-release.apk'
+
   hintlog:
     desc: Pull the dev hint log into ./hintlog (pass DEVICE=<serial> when several are attached)
     cmds:
