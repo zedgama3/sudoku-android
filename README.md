@@ -36,7 +36,7 @@ No ads, no accounts, no network access: everything runs and stays on your device
 
 The app requests no permissions, makes no network connections and collects no data. Games,
 settings and statistics are stored only on the device (and in Android's own device backup, if
-you have it enabled).
+you have it enabled). See the full [privacy policy](PRIVACY.md).
 
 ## Building
 
