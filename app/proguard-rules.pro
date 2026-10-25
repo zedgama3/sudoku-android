@@ -1,7 +1,7 @@
 # Keep kotlinx.serialization generated serializers
--keepclassmembers class com.zedgama.sudoku.data.model.** {
+-keepclassmembers class net.zg3.sudoku.data.model.** {
     *** Companion;
 }
--keepclasseswithmembers class com.zedgama.sudoku.data.model.** {
+-keepclasseswithmembers class net.zg3.sudoku.data.model.** {
     kotlinx.serialization.KSerializer serializer(...);
 }

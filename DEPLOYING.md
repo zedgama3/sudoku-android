@@ -41,7 +41,7 @@ PowerShell, run from the repository root (`c:\git\sudoku`).
 3. Launch it — tap the Sudoku icon, or from the terminal:
 
    ```powershell
-   adb shell am start -n com.zedgama.sudoku/.MainActivity
+   adb shell am start -n net.zg3.sudoku/.MainActivity
    ```
 
 ## Alternative: install a pre-built APK
@@ -60,7 +60,7 @@ the target with `adb -s <serial> install ...` (serials come from `adb devices`).
 
 - **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** — the phone has a build signed with a
   different debug key (e.g. from another machine). Uninstall first (this wipes the
-  app's data): `adb uninstall com.zedgama.sudoku`.
+  app's data): `adb uninstall net.zg3.sudoku`.
 - **Gradle can't find the SDK** — create `local.properties` in the repo root with
   `sdk.dir=C:\\Users\\<you>\\AppData\\Local\\Android\\Sdk`.
 - **Phone not detected at all** — use a data (not charge-only) USB cable, and on

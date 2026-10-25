@@ -14,11 +14,11 @@ val gitSha = git("rev-parse", "--short", "HEAD")
     ?: "unknown"
 
 android {
-    namespace = "com.zedgama.sudoku"
+    namespace = "net.zg3.sudoku"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.zedgama.sudoku"
+        applicationId = "net.zg3.sudoku"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

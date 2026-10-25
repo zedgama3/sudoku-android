@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  PACKAGE: com.zedgama.sudoku
+  PACKAGE: net.zg3.sudoku
   JBR: 'C:\Program Files\Android\Android Studio\jbr'
   ADB: '{{.USERPROFILE}}\AppData\Local\Android\Sdk\platform-tools\adb.exe'
   GRADLEW: '.\\gradlew.bat'

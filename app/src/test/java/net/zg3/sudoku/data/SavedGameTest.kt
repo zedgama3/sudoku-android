@@ -1,0 +1,111 @@
+package net.zg3.sudoku.data
+
+import net.zg3.sudoku.data.model.BoardSnapshot
+import net.zg3.sudoku.data.model.SavedGame
+import net.zg3.sudoku.data.model.toBoard
+import net.zg3.sudoku.data.model.toSnapshot
+import net.zg3.sudoku.engine.Difficulty
+import net.zg3.sudoku.engine.TestPuzzles
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SavedGameTest {
+
+    private fun sample(): SavedGame {
+        val notes = MutableList(81) { 0 }
+        notes[3] = 0b101 // notes 1 and 3
+        return SavedGame(
+            givens = TestPuzzles.KNOWN_PUZZLE,
+            solution = TestPuzzles.KNOWN_SOLUTION,
+            current = TestPuzzles.KNOWN_PUZZLE,
+            notes = notes,
+            difficulty = Difficulty.HARD,
+            elapsedMillis = 123_000,
+            mistakes = 2,
+            hintsUsed = 1,
+            undoStack = listOf(BoardSnapshot(TestPuzzles.KNOWN_PUZZLE, List(81) { 0 }))
+        )
+    }
+
+    @Test
+    fun jsonRoundTrip() {
+        val game = sample()
+        val json = Json.encodeToString(SavedGame.serializer(), game)
+        val decoded = Json.decodeFromString(SavedGame.serializer(), json)
+        assertEquals(game, decoded)
+    }
+
+    @Test
+    fun jsonRoundTripWithHintEscalationFields() {
+        val game = sample().copy(
+            hintTargetCell = 40,
+            hintStepIndex = 2,
+            hintCharged = true,
+            mistakeHintLevel = 1
+        )
+        val json = Json.encodeToString(SavedGame.serializer(), game)
+        val decoded = Json.decodeFromString(SavedGame.serializer(), json)
+        assertEquals(game, decoded)
+    }
+
+    @Test
+    fun legacyJsonWithoutHintFieldsDecodesToDefaults() {
+        val notesJson = List(81) { "0" }.joinToString(",")
+        val json = """{
+            "givens":"${TestPuzzles.KNOWN_PUZZLE}",
+            "solution":"${TestPuzzles.KNOWN_SOLUTION}",
+            "current":"${TestPuzzles.KNOWN_PUZZLE}",
+            "notes":[$notesJson],
+            "difficulty":"HARD",
+            "elapsedMillis":123000,
+            "mistakes":2,
+            "hintsUsed":1
+        }"""
+        val decoded = Json { ignoreUnknownKeys = true }
+            .decodeFromString(SavedGame.serializer(), json)
+        assertEquals(-1, decoded.hintTargetCell)
+        assertEquals(0, decoded.hintStepIndex)
+        assertEquals(false, decoded.hintCharged)
+        assertEquals(0, decoded.mistakeHintLevel)
+    }
+
+    @Test
+    fun previousBuildHintKeysAreIgnored() {
+        val notesJson = List(81) { "0" }.joinToString(",")
+        val json = """{
+            "givens":"${TestPuzzles.KNOWN_PUZZLE}",
+            "solution":"${TestPuzzles.KNOWN_SOLUTION}",
+            "current":"${TestPuzzles.KNOWN_PUZZLE}",
+            "notes":[$notesJson],
+            "difficulty":"HARD",
+            "elapsedMillis":123000,
+            "mistakes":2,
+            "hintsUsed":1,
+            "hintLevel":2,
+            "hintPinnedCell":40,
+            "hintPinnedDigit":5,
+            "hintPinnedTechniques":["NAKED_SINGLE"],
+            "hintPinnedIsReveal":false
+        }"""
+        val decoded = Json { ignoreUnknownKeys = true }
+            .decodeFromString(SavedGame.serializer(), json)
+        assertEquals(-1, decoded.hintTargetCell)
+        assertEquals(0, decoded.hintStepIndex)
+        assertEquals(false, decoded.hintCharged)
+        assertEquals(0, decoded.mistakeHintLevel)
+    }
+
+    @Test
+    fun boardRoundTrip() {
+        val game = sample()
+        val board = game.toBoard()
+        assertEquals(5, board[0].value)
+        assertTrue(board[0].isGiven)
+        assertEquals(0b101, board[3].notes)
+        val snapshot = board.toSnapshot()
+        assertEquals(game.current, snapshot.values)
+        assertEquals(game.notes, snapshot.notes)
+    }
+}
